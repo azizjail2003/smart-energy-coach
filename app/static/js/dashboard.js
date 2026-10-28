@@ -40,11 +40,23 @@
     trend.querySelector("[data-trend-text]").textContent = metric.change_display;
   }
 
+  function setSpark(card, spark) {
+    card.querySelector("[data-spark-svg]").setAttribute("aria-label", spark.label);
+    card.querySelector("[data-spark-area]").setAttribute("d", spark.area);
+    card.querySelector("[data-spark-line]").setAttribute("d", spark.line);
+    const dot = card.querySelector("[data-spark-dot]");
+    dot.style.left = `${spark.end_x}%`;
+    dot.style.top = `${spark.end_y}%`;
+  }
+
   function showKpis(kpis) {
     Object.entries(kpis).forEach(([name, metric]) => {
       const card = root.querySelector(`[data-kpi="${name}"]`);
       card.querySelector("[data-value]").textContent = metric.display;
       setTrend(card, metric);
+      if (metric.spark) {
+        setSpark(card, metric.spark);
+      }
     });
     root.querySelector("[data-savings-co2]").textContent = kpis.savings.co2_display;
     root.querySelector("[data-savings-scope]").hidden = !category;

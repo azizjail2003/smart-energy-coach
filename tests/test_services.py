@@ -193,3 +193,24 @@ def test_coach_fallback_uses_backup_tip():
     assert "Lower heating 1 °C" in answer["answer"]
     with pytest.raises(ValueError):
         MockAICoach(status="broken")
+
+
+@pytest.mark.parametrize("building", mock_data.BUILDINGS)
+@pytest.mark.parametrize("category", [None, "heating", "servers"])
+def test_daily_trend_ends_with_todays_figures(analytics, building, category):
+    trend = analytics.get_daily_trend(building, category=category)
+    kpis = analytics.get_kpis(building)
+    today = kpis["by_category"][category] if category else kpis
+    assert [entry["date"] for entry in trend] == [DEMO_DATE - timedelta(days=offset) for offset in range(6, -1, -1)]
+    last = trend[-1]
+    assert (last["energy_kwh"], last["co2_kg"], last["cost_eur"]) == (
+        today["energy_kwh"], today["co2_kg"], today["cost_eur"],
+    )
+    assert last["savings_eur"] == kpis["savings"]["eur"]
+
+
+def test_library_trend_matches_last_week_total(analytics):
+    trend = analytics.get_daily_trend("library")
+    assert round(sum(entry["energy_kwh"] for entry in trend), 1) == 103.3
+    # Savings compare each day with the same weekday one week earlier.
+    assert trend[0]["savings_eur"] == round((mock_data.BUILDINGS["library"]["daily_kwh"][16] - 15.9) * 0.35, 2)

@@ -73,6 +73,7 @@ Shadows: `--shadow-float` for cards and pills on the ground; `--shadow-pop` (wit
 - **Card:** `--card`, 16 px radius, `--shadow-float`, 20 px padding. Title row with the icon in a 34 px `--primary-tint` circle.
 - **Button (primary):** `--primary`, `--on-primary` 600 text, 40 px, fully round, soft orange shadow; brightens on hover. Disabled at 55 % opacity.
 - **Button (secondary):** `--card` with a 1 px `--input` outline.
+- **KPI trend line:** each KPI card shows the last 7 days as a smooth `--brand` line with a fading area, running edge to edge under the label; a dot marks today. Value bottom left, change bottom right (stacked below 520 px). The SVG has a text label listing every day, and it follows the category filter.
 - **Segmented filter:** muted track; the selected option sits on a raised card in `--primary-ink`.
 - **Top bar tabs:** text links with a 2 px `--primary` underline on the selected one.
 - **Inputs and selects:** `--card`, 1 px `--input`, 44 px, 8 px radius; focus turns the border `--primary` with a 3 px `--primary-tint` ring. Error state: `--danger` border and message below, linked with `aria-describedby`.

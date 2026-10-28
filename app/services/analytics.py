@@ -42,6 +42,32 @@ class MockAnalyticsService:
             "by_category": by_category,
         }
 
+    def get_daily_trend(self, building_id, days=7, category=None):
+        """Energy, CO₂, cost and savings for each of the last `days` days, oldest first.
+
+        Today's entry repeats today's KPI figures. Earlier days are derived from the daily
+        totals with the CO₂ factor and tariff; savings compare each day with the same
+        weekday one week earlier and always cover the whole building.
+        """
+        building = self._building(building_id)
+        trend = []
+        for day in self._days(days):
+            if day == data.DEMO_DATE:
+                today = building["today_by_category"][category] if category else building["today"]
+                energy, co2, cost = today["energy_kwh"], today["co2_kg"], today["cost_eur"]
+                savings = building["savings_today"]["eur"]
+            else:
+                if category:
+                    energy = self._day_by_category(building, day)[category]
+                else:
+                    energy = self._daily_total(building, day)
+                co2 = round(energy * data.CO2_KG_PER_KWH, 2)
+                cost = round(energy * data.EUR_PER_KWH, 2)
+                baseline = self._daily_total(building, day - timedelta(days=7))
+                savings = round((baseline - self._daily_total(building, day)) * data.EUR_PER_KWH, 2)
+            trend.append({"date": day, "energy_kwh": energy, "co2_kg": co2, "cost_eur": cost, "savings_eur": savings})
+        return trend
+
     def get_score(self, building_id):
         score = self._building(building_id)["score"]
         # Simulated live reading: the reference score plus a small fluctuation.

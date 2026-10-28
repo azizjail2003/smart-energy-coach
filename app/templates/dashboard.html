@@ -9,6 +9,23 @@
 <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
 {% endblock %}
 
+{# Seven-day trend drawn in a stretched 200 × 44 viewBox; the dot marks today. #}
+{% macro sparkline(name, spark) -%}
+<div class="spark" data-spark>
+  <svg viewBox="0 0 200 44" preserveAspectRatio="none" role="img" aria-label="{{ spark.label }}" data-spark-svg>
+    <defs>
+      <linearGradient id="spark-fade-{{ name }}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" class="spark__stop spark__stop--top"/>
+        <stop offset="1" class="spark__stop"/>
+      </linearGradient>
+    </defs>
+    <path class="spark__area" d="{{ spark.area }}" fill="url(#spark-fade-{{ name }})" data-spark-area/>
+    <path class="spark__line" d="{{ spark.line }}" data-spark-line/>
+  </svg>
+  <span class="spark__dot" style="left: {{ spark.end_x }}%; top: {{ spark.end_y }}%" data-spark-dot></span>
+</div>
+{%- endmacro %}
+
 {% macro kpi_change(metric) -%}
 <p class="kpi__change" data-change>
   {{ trend(metric.trend, metric.change_display, metric.trend != "up") }}
@@ -42,25 +59,39 @@
     <div class="kpi-grid">
       <article class="card kpi" data-kpi="energy">
         <h3 class="kpi__label">{{ icon("zap") }}Energy today</h3>
-        <p class="kpi__value"><span data-value>{{ kpis.energy.display }}</span><span class="kpi__unit"> kWh</span></p>
-        {{ kpi_change(kpis.energy) }}
+        {{ sparkline("energy", kpis.energy.spark) }}
+        <div class="kpi__foot">
+          <p class="kpi__value"><span data-value>{{ kpis.energy.display }}</span><span class="kpi__unit"> kWh</span></p>
+          {{ kpi_change(kpis.energy) }}
+        </div>
       </article>
       <article class="card kpi" data-kpi="co2">
         <h3 class="kpi__label">{{ icon("leaf") }}CO₂ today</h3>
-        <p class="kpi__value"><span data-value>{{ kpis.co2.display }}</span><span class="kpi__unit"> kg</span></p>
-        {{ kpi_change(kpis.co2) }}
+        {{ sparkline("co2", kpis.co2.spark) }}
+        <div class="kpi__foot">
+          <p class="kpi__value"><span data-value>{{ kpis.co2.display }}</span><span class="kpi__unit"> kg</span></p>
+          {{ kpi_change(kpis.co2) }}
+        </div>
       </article>
       <article class="card kpi" data-kpi="cost">
         <h3 class="kpi__label">{{ icon("coins") }}Cost today</h3>
-        <p class="kpi__value"><span data-value>{{ kpis.cost.display }}</span></p>
-        {{ kpi_change(kpis.cost) }}
+        {{ sparkline("cost", kpis.cost.spark) }}
+        <div class="kpi__foot">
+          <p class="kpi__value"><span data-value>{{ kpis.cost.display }}</span></p>
+          {{ kpi_change(kpis.cost) }}
+        </div>
       </article>
       <article class="card kpi" data-kpi="savings">
         <h3 class="kpi__label">{{ icon("piggy") }}Savings today</h3>
-        <p class="kpi__value"><span data-value>{{ kpis.savings.display }}</span></p>
-        <p class="kpi__sub"><strong data-savings-co2>{{ kpis.savings.co2_display }}</strong> kg CO₂</p>
+        {{ sparkline("savings", kpis.savings.spark) }}
+        <div class="kpi__foot">
+          <div>
+            <p class="kpi__value"><span data-value>{{ kpis.savings.display }}</span></p>
+            <p class="kpi__sub"><strong data-savings-co2>{{ kpis.savings.co2_display }}</strong> kg CO₂</p>
+          </div>
+          {{ kpi_change(kpis.savings) }}
+        </div>
         <p class="kpi__scope" data-savings-scope{% if not category %} hidden{% endif %}>Building-wide value</p>
-        {{ kpi_change(kpis.savings) }}
       </article>
     </div>
     <p class="kpis__error" data-kpis-error hidden></p>

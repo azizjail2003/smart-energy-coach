@@ -47,7 +47,7 @@ def dashboard():
         building=building,
         category=category,
         categories=CATEGORIES,
-        kpis=presenter.kpi_cards(kpis, category),
+        kpis=presenter.kpi_cards(kpis, category, analytics.get_daily_trend(building, category=category)),
         score=presenter.score_payload(analytics.get_score(building)),
         banner=banner,
         coach_status=coach.status(),

@@ -57,11 +57,11 @@ def metric(value, unit, display, change_pct, compared_to):
     }
 
 
-def kpi_cards(kpis, category=None):
+def kpi_cards(kpis, category=None, trend=None):
     values = kpis["by_category"][category] if category else kpis
     change = values["change_pct"]
     savings = kpis["savings"]
-    return {
+    cards = {
         "energy": metric(values["energy_kwh"], "kWh", number(values["energy_kwh"]), change, "vs last week"),
         "co2": metric(values["co2_kg"], "kg", number(values["co2_kg"]), change, "vs last week"),
         "cost": metric(values["cost_eur"], "EUR", euro(values["cost_eur"]), change, "vs last week"),
@@ -71,6 +71,54 @@ def kpi_cards(kpis, category=None):
             "co2_display": number(savings["co2_kg"]),
             "scope": "building",
         },
+    }
+    if trend:
+        days = [day_label(entry["date"]) for entry in trend]
+        for name, key, show in (
+            ("energy", "energy_kwh", lambda v: f"{number(v)} kWh"),
+            ("co2", "co2_kg", lambda v: f"{number(v)} kg"),
+            ("cost", "cost_eur", euro),
+            ("savings", "savings_eur", euro),
+        ):
+            cards[name]["spark"] = sparkline([entry[key] for entry in trend], days, show)
+    return cards
+
+
+SPARK_WIDTH = 200
+SPARK_HEIGHT = 44
+SPARK_PADDING = 6
+
+
+def sparkline(values, days, show):
+    """SVG paths for a small smooth trend line and its filled area, plus a text description.
+
+    Coordinates use a 200 × 44 viewBox that the page stretches to the card width. The line
+    stops 8 units before the right edge so the dot marking today stays inside the card.
+    """
+    usable = SPARK_WIDTH - 8
+    low, high = min(values), max(values)
+    spread = (high - low) or 1
+    step = usable / (len(values) - 1)
+    points = [
+        (index * step, SPARK_PADDING + (high - value) / spread * (SPARK_HEIGHT - 2 * SPARK_PADDING))
+        for index, value in enumerate(values)
+    ]
+    # Catmull-Rom curve through every point, written as cubic Bézier segments.
+    line = f"M{points[0][0]:.1f},{points[0][1]:.1f}"
+    for index in range(len(points) - 1):
+        before = points[max(index - 1, 0)]
+        start, end = points[index], points[index + 1]
+        after = points[min(index + 2, len(points) - 1)]
+        first = (start[0] + (end[0] - before[0]) / 6, start[1] + (end[1] - before[1]) / 6)
+        second = (end[0] - (after[0] - start[0]) / 6, end[1] - (after[1] - start[1]) / 6)
+        line += f" C{first[0]:.1f},{first[1]:.1f} {second[0]:.1f},{second[1]:.1f} {end[0]:.1f},{end[1]:.1f}"
+    last_x, last_y = points[-1]
+    return {
+        "line": line,
+        "area": f"{line} L{last_x:.1f},{SPARK_HEIGHT} L0,{SPARK_HEIGHT} Z",
+        "end_x": round(last_x / SPARK_WIDTH * 100, 2),
+        "end_y": round(last_y / SPARK_HEIGHT * 100, 2),
+        "label": f"Last {len(values)} days: " + ", ".join(f"{day} {show(value)}" for day, value in zip(days, values)),
     }
 
 

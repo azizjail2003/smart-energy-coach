@@ -58,12 +58,14 @@ def building_context(analytics, building):
 def kpis():
     building = query_choice("building", BUILDINGS, required=True)
     category = query_choice("category", CATEGORIES)
-    kpis, info = building_context(get_analytics(), building)
+    analytics = get_analytics()
+    kpis, info = building_context(analytics, building)
+    trend = analytics.get_daily_trend(building, category=category)
     return jsonify(
         building=info,
         date=kpis["date"].isoformat(),
         category=category or "all",
-        kpis=presenter.kpi_cards(kpis, category),
+        kpis=presenter.kpi_cards(kpis, category, trend),
     )
 
 
