@@ -10,20 +10,23 @@
 <script src="{{ url_for('static', filename='js/history.js') }}" defer></script>
 {% endblock %}
 
+{% block tabs %}
+<nav class="tabs" aria-label="Period">
+  {% for key, label in periods.items() %}
+  <a class="tabs__tab{{ ' is-selected' if period == key }}" href="{{ url_for('pages.history', period=key) }}"{% if period == key %} aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="history" data-history data-building="{{ building }}" data-period="{{ period }}" data-day="{{ report_day }}" data-category="{{ category or '' }}">
-  <nav class="chips chips--period" aria-label="Period">
-    {% for key, label in periods.items() %}
-    <a class="chip{{ ' is-selected' if period == key }}" href="{{ url_for('pages.history', period=key) }}"{% if period == key %} aria-current="page"{% endif %}>{{ label }}</a>
-    {% endfor %}
-  </nav>
 
   <section class="card" aria-labelledby="usage-title">
     <h2 class="card__title" id="usage-title">
       {{ icon("line") }}<span>Energy use <span class="unit">({{ "kWh per hour" if period == "today" else "kWh per day" }})</span></span>
     </h2>
     {% if period == "today" %}
-    <nav class="chips chips--category" aria-label="Device type">
+    <nav class="chips chips--category segmented" aria-label="Device type">
       <a class="chip{{ ' is-selected' if not category }}" href="{{ url_for('pages.history', period='today') }}"{% if not category %} aria-current="page"{% endif %}>All</a>
       {% for key, label in categories.items() %}
       <a class="chip{{ ' is-selected' if category == key }}" href="{{ url_for('pages.history', period='today', category=key) }}"{% if category == key %} aria-current="page"{% endif %}>{{ label }}</a>

@@ -1,7 +1,7 @@
 "use strict";
 
 (function () {
-  const { apiUrl, fetchJSON, renderChart, loadInto } = window.SEM;
+  const { apiUrl, fetchJSON, renderChart, loadInto, setStatus } = window.SEM;
   const root = document.querySelector("[data-dashboard]");
   const building = root.dataset.building;
   const day = root.dataset.day;
@@ -118,6 +118,7 @@
       scoreTime.textContent = data.time_display;
       scoreTime.dateTime = data.measured_at;
       scoreError.hidden = true;
+      setStatus("live", `Live · score updated ${data.time_display}`);
     } catch (problem) {
       const retry = document.createElement("button");
       retry.type = "button";
@@ -125,6 +126,7 @@
       retry.addEventListener("click", pollScore);
       scoreError.replaceChildren(`Live update failed. ${problem.message}`, retry);
       scoreError.hidden = false;
+      setStatus("failed", "Live update failed");
     } finally {
       inFlight = false;
     }
@@ -144,6 +146,7 @@
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       stopPolling();
+      setStatus("demo", "Live updates paused");
     } else {
       pollScore();
       startPolling();
@@ -161,6 +164,7 @@
   loadHourly();
   loadDevices();
   if (!document.hidden) {
+    setStatus("live", "Live · first score update in 10 s");
     startPolling();
   }
 })();

@@ -16,79 +16,132 @@
   <link rel="icon" href="{{ url_for('static', filename='img/logo-mark.png') }}" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Montserrat:wght@700&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <script>document.documentElement.classList.add("js");</script>
+  {# Theme and rail preferences are applied before the first paint so the page never flashes. #}
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var theme = "auto";
+      var railHover = "on";
+      try {
+        theme = localStorage.getItem("sem-theme") || "auto";
+        railHover = localStorage.getItem("sem-rail-hover") || "on";
+      } catch (error) {}
+      var dark = theme === "dark" || (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      root.classList.add("js");
+      root.dataset.theme = dark ? "dark" : "light";
+      root.dataset.themePref = theme;
+      root.dataset.railHover = railHover;
+    })();
+  </script>
   {% block scripts %}{% endblock %}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <div class="layout">
-    <aside class="sidebar" data-sidebar>
-      <div class="sidebar__top">
-        <a class="brand" href="{{ url_for('pages.dashboard') }}">
-          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Smart Energy Manager" width="184" height="47">
-        </a>
-        <button class="menu-button" type="button" aria-expanded="false" aria-controls="main-nav" data-menu-button>
-          {{ icon("menu") }}<span>Menu</span>
-        </button>
-      </div>
-      <nav class="nav" id="main-nav" aria-label="Main">
-        <ul>
-          {% for endpoint, key, label, icon_name in nav_items %}
-          <li>
-            <a class="nav__link{{ ' is-active' if page == key }}" href="{{ url_for(endpoint) }}"{% if page == key %} aria-current="page"{% endif %}>
-              {{ icon(icon_name) }}<span>{{ label }}</span>
-            </a>
-          </li>
-          {% endfor %}
-        </ul>
-      </nav>
-      <p class="sidebar__footer">Fachhochschule Dortmund<br>Capstone Team IV<br>Demo data</p>
-    </aside>
-
-    <div class="main">
-      <header class="page-header">
-        <div class="page-header__title">
+  <div class="shell">
+    <header class="topbar">
+      <a class="topbar__logo" href="{{ url_for('pages.dashboard') }}">
+        <img class="topbar__wordmark logo-light" src="{{ url_for('static', filename='img/logo.png') }}" alt="Smart Energy Manager" width="148" height="38">
+        <img class="topbar__wordmark logo-dark" src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="Smart Energy Manager" width="148" height="38">
+        <img class="topbar__mark logo-light" src="{{ url_for('static', filename='img/logo-mark.png') }}" alt="" width="36" height="36">
+        <img class="topbar__mark logo-dark" src="{{ url_for('static', filename='img/logo-mark-dark.png') }}" alt="" width="36" height="36">
+      </a>
+      <div class="topbar__page">
+        <div class="topbar__title">
           {% block header_title %}<h1>{% block heading %}{% endblock %}</h1>{% endblock %}
           {% block description %}{% endblock %}
         </div>
-        <div class="page-header__controls">
-          <form class="building-form" method="get" action="{{ request.path }}" data-auto-submit>
-            {% for key, value in request.args.items() if key != "building" %}
-            <input type="hidden" name="{{ key }}" value="{{ value }}">
-            {% endfor %}
-            <label class="visually-hidden" for="building-select">Building</label>
-            <span class="select select--building">
-              {{ icon("building", 22, "icon select__icon") }}
-              <select id="building-select" name="building">
-                {% for key, name in buildings.items() %}
-                <option value="{{ key }}"{% if key == current_building %} selected{% endif %}>{{ name }}</option>
-                {% endfor %}
-              </select>
-              {{ icon("chevron-down", 18, "icon select__chevron") }}
-            </span>
-            <button class="button button--secondary no-js-only" type="submit">Show</button>
-          </form>
-          <p class="report-date">
-            {{ icon("calendar") }}
-            <span class="visually-hidden">Report date:</span>
-            <time datetime="{{ report_date.isoformat() }}">{{ report_date_display }}</time>
-          </p>
-        </div>
-      </header>
+        {% block tabs %}{% endblock %}
+      </div>
+      <div class="topbar__controls">
+        <form class="building-form" method="get" action="{{ request.path }}" data-auto-submit>
+          {% for key, value in request.args.items() if key != "building" %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}">
+          {% endfor %}
+          <label class="visually-hidden" for="building-select">Building</label>
+          <span class="select select--building">
+            {{ icon("building", 18, "icon select__icon") }}
+            <select id="building-select" name="building">
+              {% for key, name in buildings.items() %}
+              <option value="{{ key }}"{% if key == current_building %} selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+            {{ icon("chevron-down", 16, "icon select__chevron") }}
+          </span>
+          <button class="button button--secondary no-js-only" type="submit">Show</button>
+        </form>
+        <p class="report-date">
+          {{ icon("calendar", 18) }}
+          <span class="visually-hidden">Report date:</span>
+          <time datetime="{{ report_date.isoformat() }}">{{ report_date_display }}</time>
+        </p>
+      </div>
+    </header>
 
+    <div class="rail-cell">
+      <div class="rail" data-rail>
+        <nav class="rail__pill" aria-label="Main">
+          <ul class="rail__list">
+            {% for endpoint, key, label, icon_name in nav_items %}
+            <li>
+              <a class="rail__item{{ ' is-active' if page == key }}" href="{{ url_for(endpoint) }}" data-tip="{{ label }}" data-tip-rail{% if page == key %} aria-current="page"{% endif %}>
+                <span class="rail__icon">{{ icon(icon_name) }}</span>
+                <span class="rail__label">{{ label }}</span>
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </nav>
+
+        <div class="rail__pill rail__pill--end">
+          <ul class="rail__list">
+            <li class="rail__only-wide">
+              <button class="rail__item" type="button" aria-pressed="true" data-rail-toggle data-tip="Expand on hover" data-tip-rail>
+                <span class="rail__icon">{{ icon("panel-close", 20, "icon rail__when-on") }}{{ icon("panel-open", 20, "icon rail__when-off") }}</span>
+                <span class="rail__label" data-rail-toggle-label>Expand on hover: on</span>
+              </button>
+            </li>
+            <li>
+              <button class="rail__item" type="button" data-theme-toggle data-tip="Theme" data-tip-rail>
+                <span class="rail__icon">{{ icon("monitor", 20, "icon theme-icon theme-icon--auto") }}{{ icon("moon", 20, "icon theme-icon theme-icon--dark") }}{{ icon("sun", 20, "icon theme-icon theme-icon--light") }}</span>
+                <span class="rail__label" data-theme-label>Theme: System</span>
+              </button>
+            </li>
+          </ul>
+          <div class="rail__team rail__only-wide" data-tip="Capstone Team IV · Fachhochschule Dortmund" data-tip-rail>
+            <span class="rail__avatar" aria-hidden="true">IV</span>
+            <span class="rail__label rail__team-text">
+              <strong>Capstone Team IV</strong>
+              <small>FH Dortmund · Demo data</small>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <main class="workspace" id="main" tabindex="-1">
       {% if building_source == "demo" %}
       <p class="notice">
         {{ icon("info", 16) }}
         <span>{{ buildings[current_building] }} shows demonstration data made for this prototype. Only the Library figures come from the capstone report.</span>
       </p>
       {% endif %}
+      {% block content %}{% endblock %}
+    </main>
 
-      <main class="content" id="main" tabindex="-1">
-        {% block content %}{% endblock %}
-      </main>
-    </div>
+    <footer class="statusbar">
+      <p class="statusbar__live" role="status" data-status-live>
+        <span class="dot dot--demo" data-status-dot aria-hidden="true"></span>
+        <span data-status-text>Demo data</span>
+      </p>
+      <span class="statusbar__grow"></span>
+      <span class="statusbar__extra">Fachhochschule Dortmund · Capstone Team IV</span>
+      <span class="statusbar__sep statusbar__extra" aria-hidden="true"></span>
+      <span>Europe/Berlin</span>
+      <span class="statusbar__sep" aria-hidden="true"></span>
+      <span>v{{ app_version }}</span>
+    </footer>
   </div>
   <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 </body>

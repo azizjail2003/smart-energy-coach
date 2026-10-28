@@ -1,12 +1,12 @@
 "use strict";
 
-// Shared helpers: API requests, chart rendering, loading/retry states and the page layout.
+// Shared helpers: API requests, chart rendering, loading/retry states, theme, rail, tooltips and status bar.
 window.SEM = (function () {
   const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
   const styles = getComputedStyle(document.documentElement);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const CATEGORY_COLORS = {
-    heating: "--orange",
+    heating: "--brand",
     lighting: "--chart-lighting",
     servers: "--chart-servers",
     other: "--chart-other",
@@ -76,12 +76,12 @@ window.SEM = (function () {
   }
 
   function lineDatasets(chart) {
-    const primary = token("--orange");
+    const primary = token("--brand");
     const compare = token("--chart-compare");
     const above = new Set(chart.above_limit);
     const datasets = chart.datasets.map((set) => {
       const isPrimary = set.key === "primary";
-      const pointColors = set.data.map((_, index) => (isPrimary && above.has(index) ? token("--orange-ink") : isPrimary ? primary : compare));
+      const pointColors = set.data.map((_, index) => (isPrimary && above.has(index) ? token("--primary-ink") : isPrimary ? primary : compare));
       return {
         label: set.label,
         data: set.data,
@@ -114,7 +114,7 @@ window.SEM = (function () {
   }
 
   function barDatasets(chart, highlight) {
-    let colors = token("--orange");
+    let colors = token("--brand");
     if (chart.categories) {
       colors = chart.categories.map((id) => {
         const color = token(CATEGORY_COLORS[id]);
@@ -149,8 +149,9 @@ window.SEM = (function () {
 
   function chartConfig(chart, highlight) {
     const muted = token("--muted");
-    const grid = token("--border");
+    const grid = token("--chart-grid");
     const isLine = chart.type === "line";
+    const narrow = window.matchMedia("(max-width: 520px)").matches;
     const above = new Set(chart.above_limit);
     const config = {
       type: chart.type,
@@ -185,7 +186,7 @@ window.SEM = (function () {
           x: {
             title: { display: true, text: chart.x_title, color: muted },
             grid: { color: grid, drawTicks: false },
-            ticks: { color: muted, maxRotation: 0, autoSkip: true, maxTicksLimit: isLine ? 9 : 16, padding: 6 },
+            ticks: { color: muted, maxRotation: 0, autoSkip: true, maxTicksLimit: isLine ? (narrow ? 5 : 9) : 16, padding: 6 },
           },
           y: {
             beginAtZero: true,
@@ -230,6 +231,9 @@ window.SEM = (function () {
     target.replaceChildren(wrap);
   }
 
+  // Charts drawn on this page, kept so they can be redrawn in the new colours when the theme changes.
+  const drawnCharts = new Map();
+
   function renderChart(container, chart, options = {}) {
     const canvas = container.querySelector("canvas");
     if (container.chartInstance) {
@@ -237,10 +241,16 @@ window.SEM = (function () {
     }
     Chart.defaults.font.family = token("--font");
     Chart.defaults.font.size = 12;
+    Chart.defaults.color = token("--muted");
     container.chartInstance = new Chart(canvas, chartConfig(chart, options.highlight));
+    drawnCharts.set(container, { chart, options });
     canvas.setAttribute("aria-label", chart.summary);
     container.querySelector("[data-summary]").textContent = chart.summary;
     renderTable(container.querySelector("[data-table]"), chart);
+  }
+
+  function redrawCharts() {
+    drawnCharts.forEach(({ chart, options }, container) => renderChart(container, chart, options));
   }
 
   // Shows a loading placeholder, runs `load`, and replaces the placeholder with a retry option on failure.
@@ -269,20 +279,132 @@ window.SEM = (function () {
     run();
   }
 
-  function setupLayout() {
-    const sidebar = document.querySelector("[data-sidebar]");
-    const menuButton = document.querySelector("[data-menu-button]");
-    menuButton.addEventListener("click", () => {
-      const open = sidebar.classList.toggle("is-open");
-      menuButton.setAttribute("aria-expanded", String(open));
-    });
+  // Shell preferences are stored in the browser only; the page works the same without them.
 
+  function savePreference(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      // Private windows can refuse storage; the choice then lasts until the page is left.
+    }
+  }
+
+  const root = document.documentElement;
+  const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const THEMES = ["auto", "dark", "light"];
+  const THEME_NAMES = { auto: "System", dark: "Dark", light: "Light" };
+
+  function applyTheme(preference) {
+    const dark = preference === "dark" || (preference === "auto" && darkQuery.matches);
+    const changed = root.dataset.theme !== (dark ? "dark" : "light");
+    root.dataset.themePref = preference;
+    root.dataset.theme = dark ? "dark" : "light";
+    const next = THEMES[(THEMES.indexOf(preference) + 1) % THEMES.length];
+    const button = document.querySelector("[data-theme-toggle]");
+    const label = `Theme: ${THEME_NAMES[preference]}`;
+    button.querySelector("[data-theme-label]").textContent = label;
+    button.dataset.tip = `${label}. Switch to ${THEME_NAMES[next].toLowerCase()}`;
+    button.setAttribute("aria-label", button.dataset.tip);
+    if (changed) {
+      redrawCharts();
+    }
+  }
+
+  function setupTheme() {
+    applyTheme(root.dataset.themePref || "auto");
+    document.querySelector("[data-theme-toggle]").addEventListener("click", () => {
+      const current = root.dataset.themePref || "auto";
+      const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
+      savePreference("sem-theme", next);
+      applyTheme(next);
+    });
+    darkQuery.addEventListener("change", () => applyTheme(root.dataset.themePref || "auto"));
+  }
+
+  function setupRail() {
+    const toggle = document.querySelector("[data-rail-toggle]");
+    const label = toggle.querySelector("[data-rail-toggle-label]");
+    const show = (on) => {
+      root.dataset.railHover = on ? "on" : "off";
+      toggle.setAttribute("aria-pressed", String(on));
+      label.textContent = `Expand on hover: ${on ? "on" : "off"}`;
+      toggle.dataset.tip = on ? "Keep the menu narrow" : "Expand the menu on hover";
+    };
+    show(root.dataset.railHover !== "off");
+    toggle.addEventListener("click", () => {
+      const on = root.dataset.railHover === "off";
+      savePreference("sem-rail-hover", on ? "on" : "off");
+      show(on);
+    });
+  }
+
+  // One fast tooltip for every control with data-tip. Rail entries only need it while the rail
+  // stays narrow, because the expanded rail already shows their labels.
+  function setupTooltips() {
+    const tip = document.createElement("div");
+    tip.className = "tooltip";
+    tip.setAttribute("aria-hidden", "true");
+    document.body.appendChild(tip);
+    const narrowScreen = window.matchMedia("(max-width: 760px)");
+    let timer = null;
+
+    function hide() {
+      window.clearTimeout(timer);
+      tip.classList.remove("is-visible");
+    }
+
+    function show(target) {
+      if (narrowScreen.matches || ("tipRail" in target.dataset && root.dataset.railHover !== "off")) {
+        return;
+      }
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        tip.textContent = target.dataset.tip;
+        const box = target.getBoundingClientRect();
+        const inRail = target.closest("[data-rail]") !== null;
+        const left = inRail ? box.right + 12 : box.left + box.width / 2 - tip.offsetWidth / 2;
+        const top = inRail ? box.top + box.height / 2 - tip.offsetHeight / 2 : box.bottom + 8;
+        tip.style.left = `${Math.max(8, Math.min(left, window.innerWidth - tip.offsetWidth - 8))}px`;
+        tip.style.top = `${Math.max(8, top)}px`;
+        tip.classList.add("is-visible");
+      }, 80);
+    }
+
+    document.querySelectorAll("[data-tip]").forEach((target) => {
+      target.addEventListener("mouseenter", () => show(target));
+      target.addEventListener("mouseleave", hide);
+      target.addEventListener("focus", () => {
+        if (target.matches(":focus-visible")) {
+          show(target);
+        }
+      });
+      target.addEventListener("blur", hide);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        hide();
+      }
+    });
+    window.addEventListener("scroll", hide, true);
+  }
+
+  // The left end of the status bar: live state for pages that poll, "Demo data" otherwise.
+  function setStatus(state, text) {
+    const dot = document.querySelector("[data-status-dot]");
+    dot.className = `dot dot--${state}`;
+    document.querySelector("[data-status-text]").textContent = text;
+  }
+
+  function setupLayout() {
     document.querySelectorAll("[data-auto-submit] select").forEach((select) => {
       select.addEventListener("change", () => select.form.submit());
     });
+    setupTheme();
+    setupRail();
+    setupTooltips();
   }
 
   setupLayout();
 
-  return { apiUrl, fetchJSON, formatClock, renderChart, loadInto };
+  return { apiUrl, fetchJSON, formatClock, renderChart, loadInto, setStatus };
 })();

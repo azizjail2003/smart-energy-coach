@@ -32,7 +32,7 @@
 
   <section class="kpis" aria-labelledby="kpis-title">
     <h2 class="visually-hidden" id="kpis-title">Today's figures</h2>
-    <nav class="chips" aria-label="Device type">
+    <nav class="chips segmented" aria-label="Device type">
       <a class="chip{{ ' is-selected' if not category }}" href="{{ url_for('pages.dashboard') }}" data-category-chip=""{% if not category %} aria-current="true"{% endif %}>All</a>
       {% for key, label in categories.items() %}
       <a class="chip{{ ' is-selected' if category == key }}" href="{{ url_for('pages.dashboard', category=key) }}" data-category-chip="{{ key }}"{% if category == key %} aria-current="true"{% endif %}>{{ label }}</a>
