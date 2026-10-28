@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, trend, chart_area %}
+
+{% block title %}History & Alerts{% endblock %}
+{% block heading %}History & Alerts{% endblock %}
+{% block description %}<p class="page-header__description">View past energy use and current alerts.</p>{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/history.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="history" data-history data-building="{{ building }}" data-period="{{ period }}" data-day="{{ report_day }}" data-category="{{ category or '' }}">
+  <nav class="chips chips--period" aria-label="Period">
+    {% for key, label in periods.items() %}
+    <a class="chip{{ ' is-selected' if period == key }}" href="{{ url_for('pages.history', period=key) }}"{% if period == key %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <section class="card" aria-labelledby="usage-title">
+    <h2 class="card__title" id="usage-title">
+      {{ icon("line") }}<span>Energy use <span class="unit">({{ "kWh per hour" if period == "today" else "kWh per day" }})</span></span>
+    </h2>
+    {% if period == "today" %}
+    <nav class="chips chips--category" aria-label="Device type">
+      <a class="chip{{ ' is-selected' if not category }}" href="{{ url_for('pages.history', period='today') }}"{% if not category %} aria-current="page"{% endif %}>All</a>
+      {% for key, label in categories.items() %}
+      <a class="chip{{ ' is-selected' if category == key }}" href="{{ url_for('pages.history', period='today', category=key) }}"{% if category == key %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+    {{ chart_area("history-chart") }}
+  </section>
+
+  <section class="card" aria-labelledby="alerts-title">
+    <h2 class="card__title" id="alerts-title">{{ icon("alert", 24) }}<span>Alerts <span class="unit">(latest first)</span></span></h2>
+    {% if alerts %}
+    <div class="table-wrap table-wrap--nowrap" tabindex="0" role="region" aria-label="Alerts table">
+      <table>
+        <thead>
+          <tr><th scope="col">Time</th><th scope="col">Device type</th><th scope="col">Value</th><th scope="col">Limit</th><th scope="col">Message</th></tr>
+        </thead>
+        <tbody>
+          {% for alert in alerts %}
+          <tr>
+            <td><time datetime="{{ alert.time }}">{{ alert.time_label }}</time></td>
+            <td>{{ alert.category_label }}</td>
+            <td class="value--over">{{ alert.value_display }}</td>
+            <td>{{ alert.limit_display }}</td>
+            <td>{{ alert.message }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">No readings are above the current limits. You can change the limits in <a href="{{ url_for('pages.settings') }}">Settings</a>.</p>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="weeks-title">
+    <h2 class="card__title" id="weeks-title">{{ icon("bars") }}Week over week comparison</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Metric</th><th scope="col">Last week</th><th scope="col">This week</th><th scope="col">Change</th></tr>
+        </thead>
+        <tbody>
+          {% for row in weeks %}
+          <tr>
+            <th scope="row">{{ row.label }}</th>
+            <td>{{ row.last_week }}</td>
+            <td>{{ row.this_week }}</td>
+            <td>{{ trend(row.trend, row.change_display, row.trend != "up") }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

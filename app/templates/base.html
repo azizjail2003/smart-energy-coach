@@ -1,0 +1,98 @@
+{% from "_macros.html" import icon %}
+{% set nav_items = [
+  ("pages.dashboard", "dashboard", "Dashboard", "home"),
+  ("pages.history", "history", "History & Alerts", "bell"),
+  ("pages.scenarios", "scenarios", "Scenarios", "bars"),
+  ("pages.coach", "coach", "AI Coach", "brain"),
+  ("pages.settings", "settings", "Settings", "settings"),
+] %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}{% endblock %} – Smart Energy Manager</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script>document.documentElement.classList.add("js");</script>
+  {% block scripts %}{% endblock %}
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="layout">
+    <aside class="sidebar" data-sidebar>
+      <div class="sidebar__top">
+        <a class="brand" href="{{ url_for('pages.dashboard') }}">
+          <svg class="brand__mark" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+            <rect x="3" y="18" width="6" height="11" rx="1"/><rect x="13" y="11" width="6" height="18" rx="1"/><rect x="23" y="3" width="6" height="26" rx="1"/>
+          </svg>
+          <span>Smart Energy<br>Manager</span>
+        </a>
+        <button class="menu-button" type="button" aria-expanded="false" aria-controls="main-nav" data-menu-button>
+          {{ icon("menu") }}<span>Menu</span>
+        </button>
+      </div>
+      <nav class="nav" id="main-nav" aria-label="Main">
+        <ul>
+          {% for endpoint, key, label, icon_name in nav_items %}
+          <li>
+            <a class="nav__link{{ ' is-active' if page == key }}" href="{{ url_for(endpoint) }}"{% if page == key %} aria-current="page"{% endif %}>
+              {{ icon(icon_name) }}<span>{{ label }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </nav>
+      <p class="sidebar__footer">Fachhochschule Dortmund<br>Capstone Team IV<br>Demo data</p>
+    </aside>
+
+    <div class="main">
+      <header class="page-header">
+        <div class="page-header__title">
+          {% block header_title %}<h1>{% block heading %}{% endblock %}</h1>{% endblock %}
+          {% block description %}{% endblock %}
+        </div>
+        <div class="page-header__controls">
+          <form class="building-form" method="get" action="{{ request.path }}" data-auto-submit>
+            {% for key, value in request.args.items() if key != "building" %}
+            <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endfor %}
+            <label class="visually-hidden" for="building-select">Building</label>
+            <span class="select select--building">
+              {{ icon("building", 22, "icon select__icon") }}
+              <select id="building-select" name="building">
+                {% for key, name in buildings.items() %}
+                <option value="{{ key }}"{% if key == current_building %} selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+              </select>
+              {{ icon("chevron-down", 18, "icon select__chevron") }}
+            </span>
+            <button class="button button--secondary no-js-only" type="submit">Show</button>
+          </form>
+          <p class="report-date">
+            {{ icon("calendar") }}
+            <span class="visually-hidden">Report date:</span>
+            <time datetime="{{ report_date.isoformat() }}">{{ report_date_display }}</time>
+          </p>
+        </div>
+      </header>
+
+      {% if building_source == "demo" %}
+      <p class="notice">
+        {{ icon("info", 16) }}
+        <span>{{ buildings[current_building] }} shows demonstration data made for this prototype. Only the Library figures come from the capstone report.</span>
+      </p>
+      {% endif %}
+
+      <main class="content" id="main" tabindex="-1">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, status_pill %}
+
+{% block title %}AI Coach{% endblock %}
+{% block heading %}AI Coach{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/coach.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<template id="user-icon">{{ icon("user", 22) }}</template>
+<div class="two-col two-col--coach">
+  <section class="card" aria-labelledby="ask-title">
+    <h2 class="card__title" id="ask-title">{{ icon("message", 26) }}Ask a question</h2>
+    <form class="ask" data-ask-form data-building="{{ building }}" novalidate>
+      <div class="ask__tone">
+        <label for="tone">Tone</label>
+        <span class="select">
+          <select id="tone" name="tone">
+            {% for key, label in tones.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+          {{ icon("chevron-down", 18, "icon select__chevron") }}
+        </span>
+      </div>
+      <label class="visually-hidden" for="question">Question</label>
+      <textarea id="question" name="question" rows="4" maxlength="{{ max_length }}" required
+        aria-describedby="question-count question-error"
+        placeholder="For example: How can we reduce energy use in the afternoon?"></textarea>
+      <div class="ask__footer">
+        <p class="ask__count" id="question-count" data-count>0 / {{ max_length }} characters</p>
+        <button class="button button--primary" type="submit" data-send>{{ icon("send") }}<span data-send-label>Send</span></button>
+      </div>
+      <p class="field__error" id="question-error" role="alert" data-ask-error hidden></p>
+    </form>
+
+    <ol class="messages" aria-label="Conversation" aria-live="polite" data-messages>
+      <li class="messages__empty" data-empty>No questions yet. Ask about heating, lighting or servers in {{ buildings[building] }}.</li>
+    </ol>
+  </section>
+
+  <div class="stack">
+    <section class="card" aria-labelledby="status-title">
+      <div class="card__head">
+        <h2 class="card__title" id="status-title">{{ icon("activity", 26) }}Status</h2>
+        {{ status_pill(status, status_label) }}
+      </div>
+      <dl class="facts">
+        <div><dt>AI service</dt><dd data-status-label>{{ status_label }}</dd></div>
+        <div><dt>Last response</dt><dd data-last-response>No question asked yet</dd></div>
+        <div><dt>Answer source</dt><dd data-source>–</dd></div>
+        <div><dt>Context sent</dt><dd>Selected building, question and tone</dd></div>
+        <div><dt>Mode</dt><dd>Demo answers, no AI request is made</dd></div>
+      </dl>
+      <p class="field__error" data-status-error hidden></p>
+    </section>
+
+    <section class="card" aria-labelledby="tips-title">
+      <h2 class="card__title" id="tips-title">{{ icon("bulb", 26) }}Today’s tips</h2>
+      <ol class="tips">
+        {% for tip in tips %}
+        <li>
+          <button class="tip" type="button" data-tip="{{ tip }}">
+            <span class="tip__number" aria-hidden="true">{{ loop.index }}</span>
+            <span><span class="visually-hidden">Ask about: </span>{{ tip }}</span>
+            {{ icon("chevron-right") }}
+          </button>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="note">{{ icon("info", 18) }}If the AI is offline, backup tips are shown.</p>
+    </section>
+  </div>
+</div>
+{% endblock %}

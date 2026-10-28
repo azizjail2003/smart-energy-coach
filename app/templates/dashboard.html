@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, trend, status_pill, chart_area %}
+
+{% block title %}Dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+{% endblock %}
+
+{% macro kpi_change(metric) -%}
+<p class="kpi__change" data-change>
+  {{ trend(metric.trend, metric.change_display, metric.trend != "up") }}
+  <span data-compared>{{ metric.compared_to }}</span>
+</p>
+{%- endmacro %}
+
+{% block content %}
+<div class="dashboard" data-dashboard data-building="{{ building }}" data-day="{{ report_day }}" data-category="{{ category or '' }}">
+
+  {% if banner %}
+  <section class="banner" aria-labelledby="banner-title" data-banner>
+    {{ icon("alert", 28) }}
+    <div>
+      <h2 class="banner__title" id="banner-title">{{ banner.title }}</h2>
+      <p class="banner__text">{{ banner.text }} <a href="{{ url_for('pages.history') }}">See all alerts</a></p>
+    </div>
+    <button class="banner__close" type="button" aria-label="Dismiss alert" data-banner-close>{{ icon("x") }}</button>
+  </section>
+  {% endif %}
+
+  <section class="kpis" aria-labelledby="kpis-title">
+    <h2 class="visually-hidden" id="kpis-title">Today's figures</h2>
+    <nav class="chips" aria-label="Device type">
+      <a class="chip{{ ' is-selected' if not category }}" href="{{ url_for('pages.dashboard') }}" data-category-chip=""{% if not category %} aria-current="true"{% endif %}>All</a>
+      {% for key, label in categories.items() %}
+      <a class="chip{{ ' is-selected' if category == key }}" href="{{ url_for('pages.dashboard', category=key) }}" data-category-chip="{{ key }}"{% if category == key %} aria-current="true"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+
+    <div class="kpi-grid">
+      <article class="card kpi" data-kpi="energy">
+        <h3 class="kpi__label">{{ icon("zap") }}Energy today</h3>
+        <p class="kpi__value"><span data-value>{{ kpis.energy.display }}</span><span class="kpi__unit"> kWh</span></p>
+        {{ kpi_change(kpis.energy) }}
+      </article>
+      <article class="card kpi" data-kpi="co2">
+        <h3 class="kpi__label">{{ icon("leaf") }}CO₂ today</h3>
+        <p class="kpi__value"><span data-value>{{ kpis.co2.display }}</span><span class="kpi__unit"> kg</span></p>
+        {{ kpi_change(kpis.co2) }}
+      </article>
+      <article class="card kpi" data-kpi="cost">
+        <h3 class="kpi__label">{{ icon("coins") }}Cost today</h3>
+        <p class="kpi__value"><span data-value>{{ kpis.cost.display }}</span></p>
+        {{ kpi_change(kpis.cost) }}
+      </article>
+      <article class="card kpi" data-kpi="savings">
+        <h3 class="kpi__label">{{ icon("piggy") }}Savings today</h3>
+        <p class="kpi__value"><span data-value>{{ kpis.savings.display }}</span></p>
+        <p class="kpi__sub"><strong data-savings-co2>{{ kpis.savings.co2_display }}</strong> kg CO₂</p>
+        <p class="kpi__scope" data-savings-scope{% if not category %} hidden{% endif %}>Building-wide value</p>
+        {{ kpi_change(kpis.savings) }}
+      </article>
+    </div>
+    <p class="kpis__error" data-kpis-error hidden></p>
+  </section>
+
+  <section class="card score" aria-labelledby="score-title" data-score>
+    <h2 class="card__title" id="score-title">{{ icon("leaf") }}Sustainability Score</h2>
+    <div class="score__main">
+      <p class="score__value"><span data-score-value>{{ score.reference_score }}</span> / 100</p>
+      <dl class="score__meta">
+        <div><dt>Target:</dt><dd>{{ score.target }}</dd></div>
+        <div><dt>Updated:</dt><dd><time data-score-time>–</time></dd></div>
+      </dl>
+    </div>
+    <p class="score__scope">{{ score.label }}. Shows the reference score until the first live reading (every 10 seconds).</p>
+    <dl class="score__parts">
+      {% for name, part in score.components.items() %}
+      <dt>{{ name | capitalize }}</dt>
+      <dd><span class="meter"><span style="width: {{ (part.value * 100) | round(0) }}%"></span></span></dd>
+      <dd>{{ part.display }}</dd>
+      {% endfor %}
+    </dl>
+    <p class="score__formula">{{ score.formula }}, where E is energy, C carbon and K comfort.</p>
+    <p class="score__error" data-score-error hidden></p>
+  </section>
+
+  <section class="card hourly" aria-labelledby="hourly-title">
+    <div class="card__head">
+      <h2 class="card__title" id="hourly-title">{{ icon("line") }}<span>Energy use today <span class="unit">(kWh per hour)</span></span></h2>
+      <label class="checkbox"><input type="checkbox" data-compare checked> Compare with last week</label>
+    </div>
+    {{ chart_area("hourly-chart") }}
+  </section>
+
+  <section class="card devices" aria-labelledby="devices-title">
+    <h2 class="card__title" id="devices-title">{{ icon("bars") }}This week by device type</h2>
+    <p class="devices__total">Total <strong data-week-total>…</strong></p>
+    {{ chart_area("device-chart", "compact") }}
+  </section>
+
+  <section class="card coach-strip" aria-labelledby="coach-title">
+    <div class="card__head">
+      <h2 class="card__title" id="coach-title">{{ icon("brain") }}AI Coach</h2>
+      {{ status_pill(coach_status, coach_status_label) }}
+    </div>
+    <div class="advice">
+      {{ icon("bulb", 24) }}
+      <div>
+        <p class="advice__headline">{{ advice_headline }}</p>
+        {% if advice_detail %}<p>{{ advice_detail }}</p>{% endif %}
+      </div>
+      <a class="advice__link" href="{{ url_for('pages.coach') }}">Go to AI Coach {{ icon("arrow-right", 16) }}</a>
+    </div>
+  </section>
+</div>
+{% endblock %}
