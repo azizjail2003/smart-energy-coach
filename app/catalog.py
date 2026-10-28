@@ -1,6 +1,8 @@
 """Identifiers and choices that S2 accepts in URLs, forms and API requests."""
 from zoneinfo import ZoneInfo
 
+APP_VERSION = "1.0.0"
+
 TIMEZONE = ZoneInfo("Europe/Berlin")
 
 BUILDINGS = {

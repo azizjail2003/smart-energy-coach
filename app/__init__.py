@@ -4,7 +4,7 @@ from flask import Flask, jsonify, render_template, request, session
 from flask_wtf.csrf import CSRFError, CSRFProtect
 from werkzeug.exceptions import HTTPException
 
-from app.catalog import BUILDINGS, COACH_STATUSES, DEFAULT_BUILDING
+from app.catalog import APP_VERSION, BUILDINGS, COACH_STATUSES, DEFAULT_BUILDING
 from app.services import get_analytics
 
 csrf = CSRFProtect()
@@ -67,6 +67,7 @@ def create_app(test_config=None):
         kpis = get_analytics().get_kpis(building)
         report_date = kpis["date"]
         return {
+            "app_version": APP_VERSION,
             "buildings": BUILDINGS,
             "current_building": building,
             "building_source": kpis["source"],
