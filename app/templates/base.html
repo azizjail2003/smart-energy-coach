@@ -13,7 +13,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}{% endblock %} – Smart Energy Manager</title>
-  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ url_for('static', filename='img/logo-mark.png') }}" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&display=swap">
@@ -27,10 +27,7 @@
     <aside class="sidebar" data-sidebar>
       <div class="sidebar__top">
         <a class="brand" href="{{ url_for('pages.dashboard') }}">
-          <svg class="brand__mark" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-            <rect x="3" y="18" width="6" height="11" rx="1"/><rect x="13" y="11" width="6" height="18" rx="1"/><rect x="23" y="3" width="6" height="26" rx="1"/>
-          </svg>
-          <span>Smart Energy<br>Manager</span>
+          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Smart Energy Manager" width="184" height="47">
         </a>
         <button class="menu-button" type="button" aria-expanded="false" aria-controls="main-nav" data-menu-button>
           {{ icon("menu") }}<span>Menu</span>
