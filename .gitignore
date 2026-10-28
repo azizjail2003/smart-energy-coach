@@ -1,6 +1,18 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.pyc
+.coverage
+htmlcov/
+
+# Local configuration and secrets; .env.example is meant to be shared
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+instance/
+
 .DS_Store
