@@ -1,4 +1,4 @@
-"""Stage 1 energy data model for the Energy Simulation and Analytics Engine."""
+"""Subsystem 1 (S1): Energy Simulation and Analytics Engine."""
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
