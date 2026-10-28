@@ -5,7 +5,7 @@ Defines the SQLAlchemy ORM.
 """
 import enum
 from sqlalchemy import (
-    Column, String, Integer, Enum, ForeignKey, CheckConstraint, Numeric
+    Column, String, Integer, Enum, ForeignKey, CheckConstraint, Numeric, BigInteger, DateTime
 )
 from sqlalchemy.orm import declarative_base
 
@@ -52,3 +52,32 @@ class Device(Base):
     category = Column(Enum(DeviceCategory), nullable=False)
     name = Column(String(120), nullable=False)
     rated_power_kw = Column(Numeric(8, 2), nullable=False)
+
+
+# --- Transactional & History Tables ---
+
+class EnergyLog(Base):
+    """Time-series data for energy consumption per device."""
+    __tablename__ = 'energy_logs'
+    
+    log_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
+    device_id = Column(Integer, ForeignKey('devices.device_id'), nullable=False)
+    ts = Column(DateTime, nullable=False)
+    
+    consumption_kwh = Column(Numeric(10, 3), CheckConstraint('consumption_kwh >= 0'), nullable=False)
+    co2_emissions_kg = Column(Numeric(10, 3), nullable=False)
+    indoor_temp_c = Column(Numeric(4, 1))
+    comfort_index = Column(Numeric(4, 3), CheckConstraint('comfort_index BETWEEN 0 AND 1'))
+
+class Alert(Base):
+    """Records of consumption anomalies or efficiency drops."""
+    __tablename__ = 'alerts'
+    
+    alert_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
+    ts = Column(DateTime, nullable=False)
+    alert_type = Column(String(40), nullable=False)
+    message = Column(String(255), nullable=False)
+    threshold_kwh = Column(Numeric(10, 3))
+    value_kwh = Column(Numeric(10, 3))
