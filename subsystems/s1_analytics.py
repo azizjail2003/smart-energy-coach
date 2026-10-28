@@ -1,7 +1,9 @@
 """Stage 1 energy data model for the Energy Simulation and Analytics Engine."""
 
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
+import random
 import sys
 
 try:
@@ -94,3 +96,60 @@ class ScoreCalculator:
         k_sub = self.calc_comfort(room_temp)
         total_score = int(round(100 * (0.40 * e_sub + 0.35 * c_sub + 0.25 * k_sub)))
         return {"score": total_score, "E": e_sub, "C": c_sub, "K": k_sub}
+
+
+class EnergySimulator:
+    """Generate realistic synthetic energy readings for campus devices."""
+
+    def __init__(self, calculator: ScoreCalculator | None = None) -> None:
+        """Configure the simulator with a calculator and device load profiles."""
+        self.calculator: ScoreCalculator = calculator or ScoreCalculator()
+        self.devices: list[str] = list(config.DEVICES)
+        self.base_loads: dict[str, float] = {
+            "Heating": 1.4,
+            "Lighting": 0.5,
+            "Servers": 1.1,
+            "Other": 0.3,
+        }
+
+    def generate_reading(
+        self, device: str, ts: datetime | int | None = None
+    ) -> EnergyReading:
+        """Generate and validate one synthetic reading for a device."""
+        if ts is None:
+            dt = datetime.now()
+        elif isinstance(ts, int):
+            dt = datetime.now().replace(
+                hour=ts % 24, minute=0, second=0, microsecond=0
+            )
+        else:
+            dt = ts
+
+        hour = dt.hour
+        daytime_multiplier = 1.4 if 8 <= hour <= 18 else 0.6
+        base = self.base_loads.get(device, 0.5)
+        kwh = round(base * daytime_multiplier * random.uniform(0.85, 1.25), 2)
+        temp = round(21.0 + random.uniform(-1.5, 2.0), 1)
+        co2 = self.calculator.calc_co2(kwh)
+        score_info = self.calculator.calc_sustainability_score(kwh, temp)
+
+        reading = EnergyReading(
+            timestamp=dt.strftime("%Y-%m-%d %H:%M"),
+            device_type=device,
+            kwh=kwh,
+            room_temp=temp,
+            co2_kg=co2,
+            sustainability_score=score_info["score"],
+        )
+        reading.validate()
+        return reading
+
+    def seed_history(self, days: int = 7) -> list[EnergyReading]:
+        """Generate readings for each device every three hours in past days."""
+        now = datetime.now().replace(minute=0, second=0, microsecond=0)
+        readings: list[EnergyReading] = []
+        for h in range(days * 24, 0, -3):
+            ts = now - timedelta(hours=h)
+            for dev in self.devices:
+                readings.append(self.generate_reading(dev, ts))
+        return readings
