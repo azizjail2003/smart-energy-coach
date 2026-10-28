@@ -1,8 +1,16 @@
 """Stage 1 energy data model for the Energy Simulation and Analytics Engine."""
 
 from dataclasses import asdict, dataclass
+from pathlib import Path
+import sys
 
-import config
+try:
+    import config
+except ModuleNotFoundError as error:
+    if error.name != "config":
+        raise
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import config
 
 
 @dataclass
