@@ -2,8 +2,10 @@
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
+import os
 from pathlib import Path
 import random
+import sqlite3
 import sys
 
 try:
@@ -153,3 +155,229 @@ class EnergySimulator:
             for dev in self.devices:
                 readings.append(self.generate_reading(dev, ts))
         return readings
+
+
+class AnalyticsService:
+    """Facade for energy persistence, dashboard analytics, and scenarios."""
+
+    def __init__(self, db_path: str = config.DB_PATH) -> None:
+        """Initialize calculators and ensure the service database is ready."""
+        self.db_path: str = db_path
+        self.calculator: ScoreCalculator = ScoreCalculator()
+        self.simulator: EnergySimulator = EnergySimulator(self.calculator)
+        self._ensure_table()
+
+    def _ensure_table(self) -> None:
+        """Create the energy table and its parent directory when necessary."""
+        directory = os.path.dirname(self.db_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS energy_readings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    device_type TEXT NOT NULL,
+                    kwh REAL NOT NULL,
+                    room_temp REAL NOT NULL,
+                    co2_kg REAL NOT NULL,
+                    sustainability_score INTEGER NOT NULL
+                )
+                """
+            )
+        conn.close()
+
+    def save_reading(self, reading: EnergyReading) -> None:
+        """Validate and persist one energy reading."""
+        reading.validate()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO energy_readings
+                    (timestamp, device_type, kwh, room_temp, co2_kg,
+                     sustainability_score)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    reading.timestamp,
+                    reading.device_type,
+                    reading.kwh,
+                    reading.room_temp,
+                    reading.co2_kg,
+                    reading.sustainability_score,
+                ),
+            )
+        conn.close()
+
+    def seed_if_empty(self, days: int = 7) -> int:
+        """Seed historical readings only when the table has no rows."""
+        with sqlite3.connect(self.db_path) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM energy_readings").fetchone()[0]
+        conn.close()
+        if count > 0:
+            return 0
+
+        readings = self.simulator.seed_history(days)
+        for reading in readings:
+            reading.validate()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                """
+                INSERT INTO energy_readings
+                    (timestamp, device_type, kwh, room_temp, co2_kg,
+                     sustainability_score)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        reading.timestamp,
+                        reading.device_type,
+                        reading.kwh,
+                        reading.room_temp,
+                        reading.co2_kg,
+                        reading.sustainability_score,
+                    )
+                    for reading in readings
+                ],
+            )
+        conn.close()
+        return len(readings)
+
+    def simulate_live_step(self) -> list[dict]:
+        """Generate, save, and return one current reading per device."""
+        now = datetime.now()
+        results: list[dict] = []
+        for dev in config.DEVICES:
+            reading = self.simulator.generate_reading(dev, now)
+            self.save_reading(reading)
+            results.append(reading.to_dict())
+        return results
+
+    def check_alerts(
+        self, limits: dict | None = None, recent_rows: list | None = None
+    ) -> list[dict]:
+        """Return threshold alerts for the latest readings."""
+        effective_limits = {**config.DEFAULT_LIMITS, **(limits or {})}
+        if recent_rows is None:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                recent_rows = conn.execute(
+                    "SELECT * FROM energy_readings ORDER BY id DESC LIMIT 16"
+                ).fetchall()
+            conn.close()
+
+        alerts: list[dict] = []
+        for row in recent_rows[:16]:
+            device = row["device_type"]
+            limit = effective_limits.get(device, 2.0)
+            if row["kwh"] > limit:
+                alerts.append(
+                    {
+                        "timestamp": row["timestamp"],
+                        "device_type": device,
+                        "kwh": row["kwh"],
+                        "limit": limit,
+                        "message": (
+                            f"{device} above limit: {row['kwh']} kWh "
+                            f"(Limit: {limit} kWh)"
+                        ),
+                    }
+                )
+        return alerts
+
+    def get_dashboard_summary(self, limits: dict | None = None) -> dict:
+        """Return dashboard KPIs, device totals, alerts, and recent rows."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM energy_readings ORDER BY id DESC LIMIT 32"
+            ).fetchall()
+        conn.close()
+
+        if not rows:
+            return {
+                "energy_today": 0,
+                "co2_today": 0,
+                "cost_today": 0,
+                "savings_eur": 0,
+                "savings_co2": 0,
+                "score": 80,
+                "E": 0.8,
+                "C": 0.8,
+                "K": 0.8,
+                "room_temp": 21.0,
+                "by_device": {},
+                "alerts": [],
+                "recent_rows": [],
+            }
+
+        latest_rows = rows[:16]
+        by_device = {device: 0.0 for device in config.DEVICES}
+        for row in latest_rows:
+            device = row["device_type"]
+            by_device[device] = round(by_device.get(device, 0.0) + row["kwh"], 2)
+
+        energy_today = round(sum(by_device.values()), 2)
+        co2_today = self.calculator.calc_co2(energy_today)
+        cost_today = self.calculator.calc_cost(energy_today)
+        newest_rows = rows[:4]
+        avg_temp = round(
+            sum(row["room_temp"] for row in newest_rows) / len(newest_rows), 1
+        )
+        score_parts = self.calculator.calc_sustainability_score(
+            energy_today / 8.0, avg_temp
+        )
+        saved_kwh = max(0.0, config.BASELINE_DAILY_KWH - energy_today)
+        alerts = self.check_alerts(limits=limits, recent_rows=latest_rows)
+        return {
+            "energy_today": energy_today,
+            "co2_today": co2_today,
+            "cost_today": cost_today,
+            "savings_eur": self.calculator.calc_cost(saved_kwh),
+            "savings_co2": self.calculator.calc_co2(saved_kwh),
+            "score": score_parts["score"],
+            "E": score_parts["E"],
+            "C": score_parts["C"],
+            "K": score_parts["K"],
+            "room_temp": avg_temp,
+            "by_device": by_device,
+            "alerts": alerts,
+            "recent_rows": [dict(row) for row in rows],
+        }
+
+    def simulate_scenario(
+        self,
+        current_summary: dict | float,
+        heating_delta_c: float = 0.0,
+        light_reduction_pct: float | None = None,
+    ) -> dict:
+        """Project energy, cost, carbon, and score for a what-if scenario."""
+        if isinstance(current_summary, (int, float)) and light_reduction_pct is None:
+            light_reduction_pct = heating_delta_c
+            heating_delta_c = current_summary
+            current_summary = self.get_dashboard_summary()
+
+        assert isinstance(current_summary, dict)
+        light_reduction_pct = light_reduction_pct or 0.0
+        before_kwh = current_summary.get("energy_today") or 15.7
+        by_dev = current_summary.get("by_device") or {}
+        heating_kwh = by_dev.get("Heating", 7.0)
+        lighting_kwh = by_dev.get("Lighting", 3.0)
+        heating_change = heating_kwh * (heating_delta_c * 0.06)
+        lighting_change = -lighting_kwh * (light_reduction_pct / 100.0)
+        after_kwh = round(max(1.0, before_kwh + heating_change + lighting_change), 2)
+        new_temp = current_summary.get("room_temp", 21.0) + heating_delta_c
+        after_score = self.calculator.calc_sustainability_score(
+            after_kwh / 8.0, new_temp
+        )["score"]
+        return {
+            "before_kwh": before_kwh,
+            "after_kwh": after_kwh,
+            "before_co2": self.calculator.calc_co2(before_kwh),
+            "after_co2": self.calculator.calc_co2(after_kwh),
+            "before_cost": self.calculator.calc_cost(before_kwh),
+            "after_cost": self.calculator.calc_cost(after_kwh),
+            "before_score": current_summary.get("score", 80),
+            "after_score": after_score,
+        }
