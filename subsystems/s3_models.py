@@ -5,7 +5,7 @@ Defines the SQLAlchemy ORM.
 """
 import enum
 from sqlalchemy import (
-    Column, String, Integer, Enum, ForeignKey, CheckConstraint, Numeric, BigInteger, DateTime
+    Column, String, Integer, Enum, ForeignKey, CheckConstraint, Numeric, BigInteger, DateTime, Text
 )
 from sqlalchemy.orm import declarative_base
 
@@ -81,3 +81,29 @@ class Alert(Base):
     message = Column(String(255), nullable=False)
     threshold_kwh = Column(Numeric(10, 3))
     value_kwh = Column(Numeric(10, 3))
+
+class SustainabilitySnapshot(Base):
+    """Hourly computed scores for building performance."""
+    __tablename__ = 'sustainability_snapshots'
+    
+    snapshot_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
+    computed_at = Column(DateTime, nullable=False)
+    score = Column(Numeric(5, 2), nullable=False)
+    e_efficiency = Column(Numeric(4, 3))
+    c_carbon = Column(Numeric(4, 3))
+    k_comfort = Column(Numeric(4, 3))
+    total_daily_kwh = Column(Numeric(10, 3))
+
+class AIRecommendation(Base):
+    """Stores AI tips, caching them by context_hash to save API costs."""
+    __tablename__ = 'ai_recommendations'
+    
+    rec_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    tone = Column(Enum(ToneEnum), nullable=False)
+    context_hash = Column(String(64), nullable=False, index=True)
+    response_text = Column(Text, nullable=False)
+    source = Column(Enum(SourceEnum), nullable=False)
+    tokens_used = Column(Integer)
