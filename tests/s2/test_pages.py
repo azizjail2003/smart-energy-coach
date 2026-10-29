@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app import create_app
+from subsystems.s2_web import create_app
 
 PAGES = ["/", "/history", "/scenarios", "/coach", "/settings"]
 

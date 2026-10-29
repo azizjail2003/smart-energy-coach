@@ -2,9 +2,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.services import mock_data
-from app.services.analytics import MockAnalyticsService
-from app.services.coach import MockAICoach
+from subsystems.s2_web.services import mock_data
+from subsystems.s2_web.services.analytics import MockAnalyticsService
+from subsystems.s2_web.services.coach import MockAICoach
 
 DEMO_DATE = date(2024, 5, 14)
 

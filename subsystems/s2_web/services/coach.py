@@ -1,4 +1,4 @@
-from app.catalog import COACH_STATUSES
+from subsystems.s2_web.catalog import COACH_STATUSES
 from . import mock_data as data
 
 TONE_TEMPLATES = {

@@ -4,8 +4,8 @@ from flask import Flask, jsonify, render_template, request, session
 from flask_wtf.csrf import CSRFError, CSRFProtect
 from werkzeug.exceptions import HTTPException
 
-from app.catalog import APP_VERSION, BUILDINGS, COACH_STATUSES, DEFAULT_BUILDING
-from app.services import get_analytics
+from subsystems.s2_web.catalog import APP_VERSION, BUILDINGS, COACH_STATUSES, DEFAULT_BUILDING
+from subsystems.s2_web.services import get_analytics
 
 csrf = CSRFProtect()
 
@@ -45,7 +45,7 @@ def create_app(test_config=None):
     if not app.config["USE_MOCK"]:
         raise RuntimeError(
             "USE_MOCK is false, but no adapters for the real S1 and S3 services exist yet. "
-            "Set USE_MOCK=true or add the adapters in app/services/__init__.py."
+            "Set USE_MOCK=true or add the adapters in subsystems/s2_web/services/__init__.py."
         )
     if app.config["COACH_STATUS"] not in COACH_STATUSES:
         raise RuntimeError(f"MOCK_COACH_STATUS must be one of: {', '.join(COACH_STATUSES)}.")
@@ -53,7 +53,7 @@ def create_app(test_config=None):
     app.json.sort_keys = False
     csrf.init_app(app)
 
-    from app.views import api, pages
+    from subsystems.s2_web.views import api, pages
     app.register_blueprint(pages.bp)
     app.register_blueprint(api.bp)
 

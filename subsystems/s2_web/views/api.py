@@ -3,11 +3,11 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 
-from app import presenter
-from app.catalog import (
+from subsystems.s2_web import presenter
+from subsystems.s2_web.catalog import (
     BUILDINGS, CATEGORIES, COACH_STATUSES, DEFAULT_BUILDING, MAX_QUESTION_LENGTH, PERIOD_DAYS, TIMEZONE, TONES,
 )
-from app.services import get_analytics, get_coach
+from subsystems.s2_web.services import get_analytics, get_coach
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 

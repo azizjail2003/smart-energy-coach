@@ -3,7 +3,7 @@
 Templates and JSON routes both use these functions, so numbers are formatted
 the same way everywhere and chart data is built in one place.
 """
-from app.catalog import BUILDINGS, CATEGORIES, TIMEZONE
+from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, TIMEZONE
 
 MINUS = "−"
 

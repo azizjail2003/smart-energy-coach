@@ -1,11 +1,11 @@
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 
-from app import presenter
-from app.catalog import (
+from subsystems.s2_web import presenter
+from subsystems.s2_web.catalog import (
     BUILDINGS, CATEGORIES, COACH_STATUSES, DEFAULT_BUILDING, HISTORY_PERIODS, MAX_QUESTION_LENGTH, TONES,
 )
-from app.forms import ScenarioForm, ThresholdForm
-from app.services import get_analytics, get_coach
+from subsystems.s2_web.forms import ScenarioForm, ThresholdForm
+from subsystems.s2_web.services import get_analytics, get_coach
 
 bp = Blueprint("pages", __name__)
 

@@ -1,7 +1,7 @@
 import random
 from datetime import date, datetime, time, timedelta
 
-from app.catalog import CATEGORIES, PERIOD_DAYS, TIMEZONE
+from subsystems.s2_web.catalog import CATEGORIES, PERIOD_DAYS, TIMEZONE
 from . import mock_data as data
 
 

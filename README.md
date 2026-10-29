@@ -42,32 +42,35 @@ pytest
 
 ## Structure
 
+Each subsystem lives in its own folder under `subsystems/`. This repository branch holds S2, the web interface.
+
 ```
-app/
-  __init__.py        app factory, configuration, error handlers
-  catalog.py         accepted buildings, device types, tones and periods
-  forms.py           ScenarioForm and ThresholdForm (Flask-WTF)
-  presenter.py       display formatting and Chart.js data, shared by pages and API
-  services/
-    __init__.py      get_analytics() and get_coach(): the only way views reach S1/S3
-    analytics.py     MockAnalyticsService (S1 mock)
-    coach.py         MockAICoach (S3 mock)
-    mock_data.py     report figures and demo fixtures
-  views/
-    pages.py         the five pages
-    api.py           JSON endpoints
-  templates/         Jinja templates
-  static/            style.css, plain JavaScript, Chart.js 4.4.6
-tests/               pytest suite
-DESIGN.md            visual specification
-wsgi.py              entry point for flask run and Gunicorn
+subsystems/
+  s2_web/
+    __init__.py        app factory, configuration, error handlers
+    catalog.py         accepted buildings, device types, tones and periods
+    forms.py           ScenarioForm and ThresholdForm (Flask-WTF)
+    presenter.py       display formatting and Chart.js data, shared by pages and API
+    services/
+      __init__.py      get_analytics() and get_coach(): the only way views reach S1/S3
+      analytics.py     MockAnalyticsService (S1 mock)
+      coach.py         MockAICoach (S3 mock)
+      mock_data.py     report figures and demo fixtures
+    views/
+      pages.py         the five pages
+      api.py           JSON endpoints
+    templates/         Jinja templates
+    static/            style.css, plain JavaScript, Chart.js 4.4.6
+tests/s2/              pytest suite for S2
+docs/s2/DESIGN.md      visual specification
+wsgi.py                entry point for flask run and Gunicorn
 ```
 
 Pages: Dashboard `/`, History & Alerts `/history`, Scenarios `/scenarios`, AI Coach `/coach`, Settings `/settings`. Every page accepts `?building=`; the choice is kept in the session.
 
 ## Mock data
 
-`app/services/mock_data.py` holds every figure. The Library values (reference date Tuesday 14 May 2024) are the capstone report figures. Lecture Hall A and Lab Building are demonstration datasets made up for the prototype and are labelled as such in the interface. All series are fixed lists or derived from them, so changing building or category never changes history. Only `/api/score` adds a random variation of at most ±0.5 points to the reference score. Times use Europe/Berlin.
+`subsystems/s2_web/services/mock_data.py` holds every figure. The Library values (reference date Tuesday 14 May 2024) are the capstone report figures. Lecture Hall A and Lab Building are demonstration datasets made up for the prototype and are labelled as such in the interface. All series are fixed lists or derived from them, so changing building or category never changes history. Only `/api/score` adds a random variation of at most ±0.5 points to the reference score. Times use Europe/Berlin.
 
 ## Service integration (provisional contracts)
 
@@ -91,7 +94,7 @@ class MockAICoach:                     # S3
     tips(building_id) -> list[str]
 ```
 
-Integration point: `app/services/__init__.py`. Replace the two factory functions with adapters for the real services and remove the `USE_MOCK` check in `app/__init__.py`. Views and templates do not need to change.
+Integration point: `subsystems/s2_web/services/__init__.py`. Replace the two factory functions with adapters for the real services and remove the `USE_MOCK` check in `subsystems/s2_web/__init__.py`. Views and templates do not need to change.
 
 ### Session state
 
