@@ -107,3 +107,11 @@ class AIRecommendation(Base):
     response_text = Column(Text, nullable=False)
     source = Column(Enum(SourceEnum), nullable=False)
     tokens_used = Column(Integer)
+
+class Setting(Base):
+    """Configuration table for alert limits per building and device category."""
+    __tablename__ = 'settings'
+    
+    building_id = Column(String(32), ForeignKey('buildings.building_id'), primary_key=True)
+    device_category = Column(Enum(DeviceCategory), primary_key=True)
+    alert_limit_kwh = Column(Numeric(6, 2), CheckConstraint('alert_limit_kwh > 0'), nullable=False)
