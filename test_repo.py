@@ -71,3 +71,26 @@ repo.save_alert(
 )
 
 print("Log and Alert saved successfully!")
+
+# --- Test AI Caching System ---
+print("\n--- Testing AI Recommendation Cache... ---")
+context_hash_test = "hash_12345_abcde"
+
+# Save a mock recommendation
+repo.save_ai_recommendation(
+    building_id="campus-A",
+    context_hash=context_hash_test,
+    tone="analytical",
+    response='{"tip": "Reduce HVAC usage in peak hours to improve efficiency"}',
+    source="openai",
+    tokens=150
+)
+print("AI Recommendation saved successfully!")
+
+# Retrieve it using the hash
+print("--- Retrieving cached recommendation... ---")
+cached_response = repo.get_cached_recommendation(
+    building_id="campus-A",
+    context_hash=context_hash_test
+)
+print(f"Cached Response: {cached_response}")

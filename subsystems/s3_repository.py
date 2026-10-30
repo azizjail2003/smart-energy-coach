@@ -2,11 +2,12 @@
 Repository layer for Subsystem 3.
 Implements the data access methods required by S1 (Analytics) and S3 (AI Coach)
 """
+
 from typing import Dict, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from subsystems.s3_models import (
-    EnergyLog, Alert, Setting, DeviceCategory
+    EnergyLog, Alert, AIRecommendation, Setting, DeviceCategory, ToneEnum, SourceEnum
 )
 
 class MySQLRepository:
@@ -56,7 +57,7 @@ class MySQLRepository:
         # Commit the transaction to save all limits safely
         self.session.commit()
 
-# --- Time-Series Data & Alerts ---
+    # --- Time-Series Data & Alerts ---
 
     def save_energy_log(self, building_id: str, device_id: int, timestamp: datetime,
                         consumption: float, co2: float, temp: Optional[float] = None, 
@@ -92,4 +93,38 @@ class MySQLRepository:
             value_kwh=value
         )
         self.session.add(new_alert)
+        self.session.commit()
+
+    # --- AI Recommendations & Caching ---
+
+    def get_cached_recommendation(self, building_id: str, context_hash: str) -> Optional[str]:
+        """
+        Checks if an identical AI request was made recently.
+        Returns the cached JSON response string if found, otherwise None.
+        """
+        cached = self.session.query(AIRecommendation).filter_by(
+            building_id=building_id,
+            context_hash=context_hash
+        ).order_by(AIRecommendation.created_at.desc()).first()
+        
+        if cached:
+            return cached.response_text
+        return None
+
+    def save_ai_recommendation(self, building_id: str, context_hash: str, tone: str, 
+                               response: str, source: str, tokens: int = 0) -> None:
+        """
+        Saves a new AI recommendation to the database.
+        'source' indicates if this came from 'openai', 'fallback', or 'cache'.
+        """
+        new_rec = AIRecommendation(
+            building_id=building_id,
+            created_at=datetime.now(),
+            tone=ToneEnum(tone),
+            context_hash=context_hash,
+            response_text=response,
+            source=SourceEnum(source),
+            tokens_used=tokens
+        )
+        self.session.add(new_rec)
         self.session.commit()
