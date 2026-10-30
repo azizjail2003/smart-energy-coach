@@ -28,6 +28,7 @@ class ToneEnum(enum.Enum):
 
 class SourceEnum(enum.Enum):
     openai = 'openai'
+    nvidia = 'nvidia'
     fallback = 'fallback'
     cache = 'cache'
 
