@@ -60,7 +60,7 @@ class EnergyLog(Base):
     """Time-series data for energy consumption per device."""
     __tablename__ = 'energy_logs'
     
-    log_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    log_id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
     device_id = Column(Integer, ForeignKey('devices.device_id'), nullable=False)
     ts = Column(DateTime, nullable=False)
@@ -74,7 +74,7 @@ class Alert(Base):
     """Records of consumption anomalies or efficiency drops."""
     __tablename__ = 'alerts'
     
-    alert_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    alert_id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
     ts = Column(DateTime, nullable=False)
     alert_type = Column(String(40), nullable=False)
@@ -86,7 +86,7 @@ class SustainabilitySnapshot(Base):
     """Hourly computed scores for building performance."""
     __tablename__ = 'sustainability_snapshots'
     
-    snapshot_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    snapshot_id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
     computed_at = Column(DateTime, nullable=False)
     score = Column(Numeric(5, 2), nullable=False)
@@ -99,7 +99,7 @@ class AIRecommendation(Base):
     """Stores AI tips, caching them by context_hash to save API costs."""
     __tablename__ = 'ai_recommendations'
     
-    rec_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    rec_id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     building_id = Column(String(32), ForeignKey('buildings.building_id'), nullable=False)
     created_at = Column(DateTime, nullable=False)
     tone = Column(Enum(ToneEnum), nullable=False)
