@@ -9,7 +9,7 @@ import os
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 import hashlib
-from subsystems.s3_repository import MySQLRepository
+from subsystems.s3_coach.s3_repository import MySQLRepository
 
 # --- Strategy Interface ---
 
@@ -165,11 +165,8 @@ class NVIDIAClient(LLMClient):
             )
             
             content = response.choices[0].message.content
-            print(f"\n[DEBUG] Raw AI Output: {content}\n") # <- DELETE
             if content:
-                #return content.strip()
-                clean_content = content.replace("```json", "").replace("```", "").strip()
-                return clean_content
+                return content.strip()
             return '{"tip": "Failed to generate AI tip."}'
             
         except Exception as e:

@@ -6,7 +6,7 @@ Implements the data access methods required by S1 (Analytics) and S3 (AI Coach)
 from typing import Dict, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from subsystems.s3_models import (
+from subsystems.s3_coach.s3_models import (
     EnergyLog, Alert, AIRecommendation, Setting, DeviceCategory, ToneEnum, SourceEnum
 )
 
