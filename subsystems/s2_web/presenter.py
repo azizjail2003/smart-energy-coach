@@ -3,6 +3,9 @@
 Templates and JSON routes both use these functions, so numbers are formatted
 the same way everywhere and chart data is built in one place.
 """
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, TIMEZONE
 
 MINUS = "−"
@@ -352,3 +355,59 @@ def split_advice(answer):
     if not separator:
         return answer, ""
     return first + ".", rest
+
+
+class ChartPresenter:
+    """Shapes service results for the templates and for Chart.js.
+
+    The module functions above do the actual formatting. This class gives the
+    pages one object to call and keeps the display timezone in one place.
+    """
+
+    def __init__(self, timezone="Europe/Berlin"):
+        self._timezone = None
+        self.timezone = timezone
+
+    @property
+    def timezone(self):
+        """IANA name of the zone that chart labels and timestamps are shown in."""
+        return self._timezone
+
+    @timezone.setter
+    def timezone(self, name):
+        if not isinstance(name, str) or not name:
+            raise ValueError("timezone must be a non-empty IANA zone name such as 'Europe/Berlin'.")
+        try:
+            self._zone = ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"Unknown timezone '{name}'.") from None
+        self._timezone = name
+
+    def localize(self, moment):
+        """Return the moment in the display timezone, leaving naive values unchanged."""
+        return moment.astimezone(self._zone) if moment.tzinfo else moment
+
+    def now(self):
+        return datetime.now(self._zone)
+
+    def to_line_chart(self, points, label, comparison=None, comparison_label=None, limit=None):
+        points = [(self.localize(moment), value) for moment, value in points]
+        return hourly_chart(points, label, comparison, comparison_label, limit)
+
+    def to_bar_chart(self, totals):
+        return category_chart(category_rows(totals))
+
+    def to_daily_chart(self, days):
+        return daily_chart(days)
+
+    def sparkline(self, values, days, show):
+        return sparkline(values, days, show)
+
+    def kpi_cards(self, kpis, category=None, trend=None):
+        return kpi_cards(kpis, category, trend)
+
+    def score_payload(self, score):
+        return score_payload(score)
+
+    def alert_rows(self, alerts, today):
+        return alert_rows(alerts, today)

@@ -37,6 +37,17 @@ class ScenarioForm(FlaskForm):
         ],
     )
 
+    @property
+    def changes(self):
+        """The two scenario inputs as a (heating_change, lighting_reduction) pair."""
+        return self.heating_change.data, self.lighting_reduction.data
+
+    @changes.setter
+    def changes(self, pair):
+        heating, lighting = pair
+        self.heating_change.data = heating
+        self.lighting_reduction.data = lighting
+
 
 def limit_field(label):
     return FloatField(
@@ -54,3 +65,15 @@ class ThresholdForm(FlaskForm):
     lighting = limit_field("Lighting")
     servers = limit_field("Servers")
     other = limit_field("Other")
+
+    @property
+    def limits(self):
+        """Alert limits keyed by device type, in kWh per hour."""
+        return {name: self[name].data for name in ("heating", "lighting", "servers", "other")}
+
+    @limits.setter
+    def limits(self, values):
+        for name in ("heating", "lighting", "servers", "other"):
+            if name not in values:
+                raise ValueError(f"Missing limit for '{name}'.")
+            self[name].data = values[name]
