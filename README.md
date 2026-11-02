@@ -1,6 +1,102 @@
-# Smart Energy Manager – S2 web interface
+# AI-Powered Smart Energy Management System
 
-Flask frontend (subsystem S2) of the AI-Powered Smart Energy Management System, Capstone Team IV, Fachhochschule Dortmund. All data comes from mock services; the analytics (S1) and AI coach (S3) subsystems are not connected yet.
+Capstone Team IV, Fachhochschule Dortmund. A web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach. The system has three subsystems, one per team member, each in its own folder under `subsystems/`.
+
+## Team Overview
+
+| Member | Subsystem | Folder |
+| --- | --- | --- |
+| Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics` |
+| Abdelaziz Jail | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
+| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_ai_data` |
+
+## System Design
+
+Class diagrams of the implemented subsystems. Each member adds the diagram of their own subsystem.
+
+### S2 – Web Interface & Visualization
+
+Five classes. `PageView` is the only class the browser reaches; it reads numbers from S1, shapes them with `ChartPresenter`, validates input with the two forms and asks `CoachView` for the AI tip. Every private attribute has a `@property` getter and setter.
+
+```mermaid
+classDiagram
+    direction LR
+    class PageView {
+        -_analytics
+        -_presenter
+        -_coach
+        +analytics «property»
+        +presenter «property»
+        +coach «property»
+        +index(building, category)
+        +history(building, period, category)
+        +scenarios(building, form)
+        +settings(building, form)
+        +api_kpis() api_score() api_hourly() api_aggregates() api_alerts()
+    }
+    class ChartPresenter {
+        -_timezone
+        +timezone «property»
+        +to_line_chart(points)
+        +to_bar_chart(totals)
+        +to_daily_chart(days)
+        +sparkline(values)
+    }
+    class ScenarioForm {
+        <<FlaskForm>>
+        +heating_change
+        +lighting_reduction
+        +changes «property»
+        +validate() bool
+    }
+    class ThresholdForm {
+        <<FlaskForm>>
+        +heating
+        +lighting
+        +servers
+        +other
+        +limits «property»
+        +validate() bool
+    }
+    class CoachView {
+        -_coach
+        +coach «property»
+        +page(building)
+        +ask(question, tone, building)
+        +status()
+        +tips(building)
+    }
+    PageView --> ChartPresenter : builds charts with
+    PageView --> ScenarioForm : scenarios page
+    PageView --> ThresholdForm : settings page
+    PageView --> CoachView : AI tip on dashboard
+```
+
+| Class | File | Role |
+| --- | --- | --- |
+| `PageView` | `subsystems/s2_web/views/page_view.py` | Builds the context of every page and the payload of every JSON endpoint. |
+| `ChartPresenter` | `subsystems/s2_web/presenter.py` | Turns readings into Chart.js data in the display timezone. |
+| `ScenarioForm` | `subsystems/s2_web/forms.py` | What-if inputs: heating change (−3 to +3 °C) and lighting reduction (0 to 50 %). |
+| `ThresholdForm` | `subsystems/s2_web/forms.py` | One alert limit per device type (0.1 to 20 kWh/h). |
+| `CoachView` | `subsystems/s2_web/views/coach_view.py` | AI Coach page, chat answers and the dashboard tip, on top of the S3 coach. |
+
+### S1 – Monitoring, Simulation & Analytics Engine
+
+Added by the S1 owner.
+
+### S3 – AI Coach, Data Persistence & Deployment
+
+Added by the S3 owner.
+
+## Presentation Link
+
+Team video (3 to 5 minutes): _link to be added after recording_.
+
+---
+
+# S2 – Web interface
+
+Flask frontend (subsystem S2). All data comes from mock services; the analytics (S1) and AI coach (S3) subsystems are not connected yet.
 
 ## Setup
 
@@ -42,23 +138,23 @@ pytest
 
 ## Structure
 
-Each subsystem lives in its own folder under `subsystems/`. This repository branch holds S2, the web interface.
-
 ```
 subsystems/
   s2_web/
     __init__.py        app factory, configuration, error handlers
     catalog.py         accepted buildings, device types, tones and periods
     forms.py           ScenarioForm and ThresholdForm (Flask-WTF)
-    presenter.py       display formatting and Chart.js data, shared by pages and API
+    presenter.py       ChartPresenter and the formatting helpers behind it
     services/
-      __init__.py      get_analytics() and get_coach(): the only way views reach S1/S3
+      __init__.py      get_analytics(), get_coach() and the view factories: the only way routes reach S1/S3
       analytics.py     MockAnalyticsService (S1 mock)
       coach.py         MockAICoach (S3 mock)
       mock_data.py     report figures and demo fixtures
     views/
-      pages.py         the five pages
-      api.py           JSON endpoints
+      page_view.py     PageView: context for the pages and JSON endpoints
+      coach_view.py    CoachView: AI Coach page, chat answers, dashboard tip
+      pages.py         the five page routes (parse request, call PageView, render)
+      api.py           JSON routes (parse request, call PageView, jsonify)
     templates/         Jinja templates
     static/            style.css, plain JavaScript, Chart.js 4.4.6
 tests/s2/              pytest suite for S2

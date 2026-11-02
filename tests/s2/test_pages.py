@@ -153,6 +153,6 @@ def test_use_mock_false_needs_adapters(monkeypatch):
 
 
 def test_views_do_not_import_mock_data():
-    views = Path(__file__).resolve().parent.parent / "app" / "views"
+    views = Path(__file__).resolve().parent.parent.parent / "subsystems" / "s2_web" / "views"
     for source in views.glob("*.py"):
         assert "mock_data" not in source.read_text(), source.name
