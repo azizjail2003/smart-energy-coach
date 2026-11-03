@@ -4,7 +4,7 @@
 
 Stage 2 adds `ScoreCalculator`, a deterministic mathematical engine for Subsystem 1. It converts energy use into carbon and cost estimates, measures room comfort, and combines energy efficiency, carbon efficiency, and comfort into a sustainability score from 0 to 100.
 
-The calculator does not write to SQLite, read from the database, or render HTML. Its inputs and outputs are ordinary Python values and dictionaries, so the formulas can be tested independently and explained clearly during the presentation.
+The calculator does not write to MySQL, call S3's repository directly, or render HTML. Its inputs and outputs are ordinary Python values and dictionaries, so the formulas can be tested independently and explained clearly during the presentation.
 
 ## Configurable Constants
 
