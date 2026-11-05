@@ -125,6 +125,17 @@ def sparkline(values, days, show):
     }
 
 
+def score_band(value):
+    """Colour band of the score gauge: below 60 red, 60 to 80 amber, above 80 green."""
+    if value < 60:
+        band, label = "red", "Needs attention"
+    elif value <= 80:
+        band, label = "amber", "Fair"
+    else:
+        band, label = "green", "Good"
+    return {"band": band, "label": label, "needle_deg": round(max(0, min(value, 100)) * 1.8 - 90, 1)}
+
+
 def score_payload(score):
     weights = score["weights"]
     measured_at = score["measured_at"].astimezone(TIMEZONE)
@@ -133,6 +144,8 @@ def score_payload(score):
         "scope": "building",
         "score": score["live"],
         "display": number(score["live"], 1),
+        "band": score_band(score["live"]),
+        "reference_band": score_band(score["reference"]),
         "reference_score": score["reference"],
         "target": score["target"],
         "components": {

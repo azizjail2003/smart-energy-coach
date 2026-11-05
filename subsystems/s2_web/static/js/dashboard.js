@@ -116,6 +116,9 @@
   const scoreValue = score.querySelector("[data-score-value]");
   const scoreTime = score.querySelector("[data-score-time]");
   const scoreError = score.querySelector("[data-score-error]");
+  const gauge = score.querySelector("[data-gauge]");
+  const gaugeNeedle = score.querySelector("[data-gauge-needle]");
+  const scoreBand = score.querySelector("[data-score-band]");
   let timer = null;
   let inFlight = false;
 
@@ -127,6 +130,9 @@
     try {
       const data = await fetchJSON(apiUrl("/api/score", { building }));
       scoreValue.textContent = data.display;
+      gauge.className = `gauge gauge--${data.band.band}`;
+      gaugeNeedle.style.transform = `rotate(${data.band.needle_deg}deg)`;
+      scoreBand.textContent = data.band.label;
       scoreTime.textContent = data.time_display;
       scoreTime.dateTime = data.measured_at;
       scoreError.hidden = true;

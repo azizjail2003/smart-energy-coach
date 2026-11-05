@@ -1,6 +1,8 @@
 import re
 from datetime import date
 
+import pytest
+
 from subsystems.s2_web import presenter
 
 
@@ -44,3 +46,17 @@ def test_kpi_cards_include_a_sparkline_per_card():
     assert cards["energy"]["spark"]["label"].endswith("Tue 14 May 15.7 kWh")
     assert cards["savings"]["spark"]["label"].endswith("Tue 14 May €0.35")
     assert "spark" not in presenter.kpi_cards(kpis)["energy"]
+
+
+@pytest.mark.parametrize("value, band", [
+    (0, "red"), (59.9, "red"), (60, "amber"), (80, "amber"), (80.1, "green"), (100, "green"),
+])
+def test_score_band_follows_report_thresholds(value, band):
+    assert presenter.score_band(value)["band"] == band
+
+
+def test_score_band_needle_spans_the_half_circle():
+    assert presenter.score_band(0)["needle_deg"] == -90
+    assert presenter.score_band(50)["needle_deg"] == 0
+    assert presenter.score_band(100)["needle_deg"] == 90
+    assert presenter.score_band(130)["needle_deg"] == 90  # clamped to the dial

@@ -37,6 +37,8 @@ def test_score(client):
     assert data["reference_score"] == 82
     assert 81.5 <= data["score"] <= 82.5
     assert data["display"] == f"{data['score']:.1f}"
+    assert data["band"]["band"] == "green"
+    assert data["reference_band"] == {"band": "green", "label": "Good", "needle_deg": 57.6}
     assert data["target"] == 90
     assert data["components"]["energy"] == {"value": 0.86, "display": "0.86", "weight": 0.4}
     assert data["measured_at"].endswith(("+01:00", "+02:00"))

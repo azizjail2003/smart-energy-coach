@@ -100,10 +100,22 @@
   <section class="card score" aria-labelledby="score-title" data-score>
     <h2 class="card__title" id="score-title">{{ icon("leaf") }}Sustainability Score</h2>
     <div class="score__main">
-      <p class="score__value"><span data-score-value>{{ score.reference_score }}</span> / 100</p>
+      {# Half-circle gauge 0–100: red below 60, amber 60–80, green above 80. #}
+      <div class="gauge gauge--{{ score.reference_band.band }}" data-gauge>
+        <svg class="gauge__dial" viewBox="0 0 200 110" aria-hidden="true" focusable="false">
+          <path class="gauge__band gauge__band--red" d="M20 100 A80 80 0 0 1 180 100" pathLength="100" stroke-dasharray="59.4 100"/>
+          <path class="gauge__band gauge__band--amber" d="M20 100 A80 80 0 0 1 180 100" pathLength="100" stroke-dasharray="0 60.6 18.8 100"/>
+          <path class="gauge__band gauge__band--green" d="M20 100 A80 80 0 0 1 180 100" pathLength="100" stroke-dasharray="0 80.6 19.4 100"/>
+          <line class="gauge__needle" x1="100" y1="100" x2="100" y2="38" style="transform: rotate({{ score.reference_band.needle_deg }}deg)" data-gauge-needle/>
+          <circle class="gauge__hub" cx="100" cy="100" r="7"/>
+        </svg>
+        <p class="score__value"><span data-score-value>{{ score.reference_score }}</span> / 100</p>
+        <p class="gauge__band-label" data-score-band>{{ score.reference_band.label }}</p>
+      </div>
       <dl class="score__meta">
         <div><dt>Target:</dt><dd>{{ score.target }}</dd></div>
         <div><dt>Updated:</dt><dd><time data-score-time>–</time></dd></div>
+        <div class="score__legend"><dt class="visually-hidden">Bands:</dt><dd><span class="swatch swatch--red"></span>&lt;60 <span class="swatch swatch--amber"></span>60–80 <span class="swatch swatch--green"></span>&gt;80</dd></div>
       </dl>
     </div>
     <p class="score__scope">{{ score.label }}. Shows the reference score until the first live reading (every 10 seconds).</p>
