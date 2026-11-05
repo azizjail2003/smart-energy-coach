@@ -67,6 +67,11 @@ class PageView:
     def report_date(self, building):
         return self._analytics.get_kpis(building)["date"]
 
+    def todays_alerts(self, building, kpis):
+        """Alerts from the report date, latest first."""
+        return [alert for alert in self._analytics.get_alerts(building, limit=100)
+                if alert["time"].date() == kpis["date"]]
+
     def building(self, building):
         """Building header used by every JSON response."""
         kpis = self._analytics.get_kpis(building)
@@ -78,15 +83,17 @@ class PageView:
         """Template context for the dashboard."""
         analytics, presenter = self._analytics, self._presenter
         kpis = analytics.get_kpis(building)
-        todays_alerts = [alert for alert in analytics.get_alerts(building) if alert["time"].date() == kpis["date"]]
         context = {
             "page": "dashboard",
             "building": building,
             "category": category,
             "categories": CATEGORIES,
-            "kpis": presenter.kpi_cards(kpis, category, analytics.get_daily_trend(building, category=category)),
+            "kpis": presenter.kpi_cards(
+                kpis, category, analytics.get_daily_trend(building, category=category),
+                analytics.get_week_comparison(building),
+            ),
             "score": presenter.score_payload(analytics.get_score(building)),
-            "banner": alert_banner(todays_alerts[0]) if todays_alerts else None,
+            "banner": alert_banner(self.todays_alerts(building, kpis)),
             "report_day": kpis["date"].isoformat(),
         }
         if self._coach is not None:
@@ -144,7 +151,7 @@ class PageView:
             "building": info,
             "date": kpis["date"].isoformat(),
             "category": category or "all",
-            "kpis": self._presenter.kpi_cards(kpis, category, trend),
+            "kpis": self._presenter.kpi_cards(kpis, category, trend, self._analytics.get_week_comparison(building)),
         }
 
     def api_score(self, building):
@@ -190,11 +197,14 @@ class PageView:
 
         daily_chart = None
         if len(days) > 1:
-            daily_totals = []
+            by_day = []
             for day in days:
-                readings = [kwh for _, kwh in analytics.get_hourly(building, day) if kwh is not None]
-                daily_totals.append((day, round(sum(readings), 1)))
-            daily_chart = presenter.to_daily_chart(daily_totals)
+                parts = {}
+                for category in CATEGORIES:
+                    readings = [kwh for _, kwh in analytics.get_hourly(building, day, category) if kwh is not None]
+                    parts[category] = sum(readings)
+                by_day.append((day, parts))
+            daily_chart = presenter.to_daily_chart(by_day)
 
         return {
             "building": info,
@@ -215,4 +225,5 @@ class PageView:
             "unit": "kWh",
             "limits_kwh": self._analytics.get_limits(building),
             "alerts": self._presenter.alert_rows(self._analytics.get_alerts(building), kpis["date"]),
+            "banner": alert_banner(self.todays_alerts(building, kpis)),
         }

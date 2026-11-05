@@ -21,6 +21,11 @@ def test_dashboard_shows_reference_figures(client):
         assert text in html
     assert '<span data-score-value>82</span> / 100' in html
     assert "Lower the heating by 1 °C between 13:00 and 17:00." in html
+    assert '<strong data-week-eur>€2.35</strong>' in html
+    assert "gauge gauge--green" in html
+    # Tooltips on the score, each of E, C and K, and CO₂ (S2-NFR7).
+    assert html.count("data-tip-info") == 5
+    assert 'aria-label="About comfort: K, weight 0.25' in html
 
 
 def test_history_shows_alerts_and_week_comparison(client):
@@ -84,6 +89,26 @@ def test_settings_save_limits_for_session(client, csrf_token):
     alerts = client.get("/api/alerts?building=library").get_json()
     assert alerts["limits_kwh"]["heating"] == 2.5
     assert all(alert["category"] != "heating" for alert in alerts["alerts"])
+
+
+def test_new_alert_reaches_the_banner_on_the_next_refresh(client, csrf_token):
+    # The dashboard polls /api/alerts every 10 s, so a lower limit shows up in the banner without a reload.
+    before = client.get("/api/alerts?building=library").get_json()["banner"]
+    limits = {"heating": "2.0", "lighting": "0.2", "servers": "3.5", "other": "1.0"}
+    client.post("/settings", data={"csrf_token": csrf_token, **limits})
+    after = client.get("/api/alerts?building=library").get_json()["banner"]
+    assert after["key"] != before["key"]
+    assert after["title"] == "10 readings are above their limits today."
+    assert after["lines"][0] == "17:00 Lighting: 0.22 kWh, limit 0.2 kWh"
+    assert after["lines"][-1] == "and 7 more"
+
+
+def test_dashboard_hides_the_banner_without_alerts(client, csrf_token):
+    limits = {"heating": "20", "lighting": "20", "servers": "20", "other": "20"}
+    client.post("/settings", data={"csrf_token": csrf_token, **limits})
+    html = client.get("/").get_data(as_text=True)
+    assert 'data-banner data-banner-key="" hidden' in html
+    assert client.get("/api/alerts?building=library").get_json()["banner"] is None
 
 
 def test_settings_limits_survive_a_new_app_instance(client, csrf_token):

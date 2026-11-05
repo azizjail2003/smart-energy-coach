@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icon, trend, status_pill, chart_area %}
+{% from "_macros.html" import icon, trend, status_pill, chart_area, info_tip %}
 
 {% block title %}Dashboard{% endblock %}
 {% block heading %}Dashboard{% endblock %}
@@ -36,16 +36,18 @@
 {% block content %}
 <div class="dashboard" data-dashboard data-building="{{ building }}" data-day="{{ report_day }}" data-category="{{ category or '' }}">
 
-  {% if banner %}
-  <section class="banner" aria-labelledby="banner-title" data-banner>
+  {# Always in the page so the 10 s refresh can show a new alert; hidden while there are none. #}
+  <section class="banner" aria-labelledby="banner-title" aria-live="polite" data-banner data-banner-key="{{ banner.key if banner else '' }}"{% if not banner %} hidden{% endif %}>
     {{ icon("alert", 28) }}
     <div>
-      <h2 class="banner__title" id="banner-title">{{ banner.title }}</h2>
-      <p class="banner__text">{{ banner.text }} <a href="{{ url_for('pages.history') }}">See all alerts</a></p>
+      <h2 class="banner__title" id="banner-title" data-banner-title>{{ banner.title if banner }}</h2>
+      <p class="banner__text"><span data-banner-text>{{ banner.text if banner }}</span> <a href="{{ url_for('pages.history') }}">See all alerts</a></p>
+      <ul class="banner__list" data-banner-list>
+        {% for line in (banner.lines if banner else []) %}<li>{{ line }}</li>{% endfor %}
+      </ul>
     </div>
-    <button class="banner__close" type="button" aria-label="Dismiss alert" data-banner-close>{{ icon("x") }}</button>
+    <button class="banner__close" type="button" aria-label="Dismiss alerts" data-banner-close>{{ icon("x") }}</button>
   </section>
-  {% endif %}
 
   <section class="kpis" aria-labelledby="kpis-title">
     <h2 class="visually-hidden" id="kpis-title">Today's figures</h2>
@@ -66,7 +68,7 @@
         </div>
       </article>
       <article class="card kpi" data-kpi="co2">
-        <h3 class="kpi__label">{{ icon("leaf") }}CO₂ today</h3>
+        <h3 class="kpi__label">{{ icon("leaf") }}CO₂ today {{ info_tip("CO₂", kpis.co2.help) }}</h3>
         {{ sparkline("co2", kpis.co2.spark) }}
         <div class="kpi__foot">
           <p class="kpi__value"><span data-value>{{ kpis.co2.display }}</span><span class="kpi__unit"> kg</span></p>
@@ -86,11 +88,12 @@
         {{ sparkline("savings", kpis.savings.spark) }}
         <div class="kpi__foot">
           <div>
-            <p class="kpi__value"><span data-value>{{ kpis.savings.display }}</span></p>
+            <p class="kpi__value{{ ' is-negative' if kpis.savings.negative }}" data-savings-today><span data-value>{{ kpis.savings.display }}</span></p>
             <p class="kpi__sub"><strong data-savings-co2>{{ kpis.savings.co2_display }}</strong> kg CO₂</p>
           </div>
           {{ kpi_change(kpis.savings) }}
         </div>
+        <p class="kpi__week{{ ' is-negative' if kpis.savings.week.negative }}" data-savings-week>This week: <strong data-week-eur>{{ kpis.savings.week.display }}</strong> · <span data-week-co2>{{ kpis.savings.week.co2_display }}</span> kg CO₂ <span class="kpi__week-note">vs last week</span></p>
         <p class="kpi__scope" data-savings-scope{% if not category %} hidden{% endif %}>Building-wide value</p>
       </article>
     </div>
@@ -98,18 +101,30 @@
   </section>
 
   <section class="card score" aria-labelledby="score-title" data-score>
-    <h2 class="card__title" id="score-title">{{ icon("leaf") }}Sustainability Score</h2>
+    <h2 class="card__title">{{ icon("leaf") }}<span id="score-title">Sustainability Score</span> {{ info_tip("the score", score.help) }}</h2>
     <div class="score__main">
-      <p class="score__value"><span data-score-value>{{ score.reference_score }}</span> / 100</p>
+      {# Half-circle gauge 0–100: red below 60, amber 60–80, green above 80. #}
+      <div class="gauge gauge--{{ score.reference_band.band }}" data-gauge>
+        <svg class="gauge__dial" viewBox="0 0 200 110" aria-hidden="true" focusable="false">
+          <path class="gauge__band gauge__band--red" d="M20 100 A80 80 0 0 1 180 100" pathLength="100" stroke-dasharray="59.4 100"/>
+          <path class="gauge__band gauge__band--amber" d="M20 100 A80 80 0 0 1 180 100" pathLength="100" stroke-dasharray="0 60.6 18.8 100"/>
+          <path class="gauge__band gauge__band--green" d="M20 100 A80 80 0 0 1 180 100" pathLength="100" stroke-dasharray="0 80.6 19.4 100"/>
+          <line class="gauge__needle" x1="100" y1="100" x2="100" y2="38" style="transform: rotate({{ score.reference_band.needle_deg }}deg)" data-gauge-needle/>
+          <circle class="gauge__hub" cx="100" cy="100" r="7"/>
+        </svg>
+        <p class="score__value"><span data-score-value>{{ score.reference_score }}</span> / 100</p>
+        <p class="gauge__band-label" data-score-band>{{ score.reference_band.label }}</p>
+      </div>
       <dl class="score__meta">
         <div><dt>Target:</dt><dd>{{ score.target }}</dd></div>
         <div><dt>Updated:</dt><dd><time data-score-time>–</time></dd></div>
+        <div class="score__legend"><dt class="visually-hidden">Bands:</dt><dd><span class="swatch swatch--red"></span>&lt;60 <span class="swatch swatch--amber"></span>60–80 <span class="swatch swatch--green"></span>&gt;80</dd></div>
       </dl>
     </div>
     <p class="score__scope">{{ score.label }}. Shows the reference score until the first live reading (every 10 seconds).</p>
     <dl class="score__parts">
       {% for name, part in score.components.items() %}
-      <dt>{{ name | capitalize }}</dt>
+      <dt>{{ name | capitalize }} ({{ {"energy": "E", "carbon": "C", "comfort": "K"}[name] }}) {{ info_tip(name, part.help) }}</dt>
       <dd><span class="meter"><span style="width: {{ (part.value * 100) | round(0) }}%"></span></span></dd>
       <dd>{{ part.display }}</dd>
       {% endfor %}

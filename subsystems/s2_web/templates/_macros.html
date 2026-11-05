@@ -48,6 +48,11 @@
 </span>
 {%- endmacro %}
 
+{# Small info button; the text shows as a tooltip and is read out by screen readers. #}
+{% macro info_tip(label, text) -%}
+<button class="info-tip" type="button" data-tip="{{ text }}" data-tip-info aria-label="About {{ label }}: {{ text }}">{{ icon("info", 16) }}</button>
+{%- endmacro %}
+
 {% macro status_pill(status, label) -%}
 <span class="pill pill--{{ status }}" data-status-pill>{{ label }}</span>
 {%- endmacro %}

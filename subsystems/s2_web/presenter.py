@@ -6,7 +6,7 @@ the same way everywhere and chart data is built in one place.
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, TIMEZONE
+from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, METRIC_HELP, TIMEZONE
 
 MINUS = "−"
 
@@ -22,6 +22,11 @@ def number(value, decimals=1):
     return text
 
 
+def reading(value):
+    """kWh reading with one decimal, or two when one would hide the difference (0.22 not 0.2)."""
+    return number(value, 1 if round(value, 1) == round(value, 2) else 2)
+
+
 def signed(value, decimals=1):
     if round(value, decimals) > 0:
         return "+" + number(value, decimals)
@@ -30,6 +35,11 @@ def signed(value, decimals=1):
 
 def euro(value):
     return f"€{value:.2f}"
+
+
+def money(value):
+    """Euro amount that keeps its sign in front of the symbol, e.g. −€0.20."""
+    return (MINUS if round(value, 2) < 0 else "") + euro(abs(value))
 
 
 def trend(change):
@@ -60,21 +70,32 @@ def metric(value, unit, display, change_pct, compared_to):
     }
 
 
-def kpi_cards(kpis, category=None, trend=None):
+def week_savings(comparison):
+    """€ and kg CO₂ saved this week against last week. Negative when this week used more."""
+    last, this = comparison["last_week"], comparison["this_week"]
+    eur = round(last["cost_eur"] - this["cost_eur"], 2)
+    co2 = round(last["co2_kg"] - this["co2_kg"], 1)
+    return {"eur": eur, "co2_kg": co2, "display": money(eur), "co2_display": number(co2), "negative": eur < 0}
+
+
+def kpi_cards(kpis, category=None, trend=None, weeks=None):
     values = kpis["by_category"][category] if category else kpis
     change = values["change_pct"]
     savings = kpis["savings"]
     cards = {
         "energy": metric(values["energy_kwh"], "kWh", number(values["energy_kwh"]), change, "vs last week"),
-        "co2": metric(values["co2_kg"], "kg", number(values["co2_kg"]), change, "vs last week"),
+        "co2": {**metric(values["co2_kg"], "kg", number(values["co2_kg"]), change, "vs last week"), "help": METRIC_HELP["co2"]},
         "cost": metric(values["cost_eur"], "EUR", euro(values["cost_eur"]), change, "vs last week"),
         "savings": {
-            **metric(savings["eur"], "EUR", euro(savings["eur"]), savings["change_pct"], "vs normal use"),
+            **metric(savings["eur"], "EUR", money(savings["eur"]), savings["change_pct"], "vs normal use"),
             "co2_kg": savings["co2_kg"],
             "co2_display": number(savings["co2_kg"]),
+            "negative": savings["eur"] < 0,
             "scope": "building",
         },
     }
+    if weeks:
+        cards["savings"]["week"] = week_savings(weeks)
     if trend:
         days = [day_label(entry["date"]) for entry in trend]
         for name, key, show in (
@@ -125,6 +146,17 @@ def sparkline(values, days, show):
     }
 
 
+def score_band(value):
+    """Colour band of the score gauge: below 60 red, 60 to 80 amber, above 80 green."""
+    if value < 60:
+        band, label = "red", "Needs attention"
+    elif value <= 80:
+        band, label = "amber", "Fair"
+    else:
+        band, label = "green", "Good"
+    return {"band": band, "label": label, "needle_deg": round(max(0, min(value, 100)) * 1.8 - 90, 1)}
+
+
 def score_payload(score):
     weights = score["weights"]
     measured_at = score["measured_at"].astimezone(TIMEZONE)
@@ -133,10 +165,13 @@ def score_payload(score):
         "scope": "building",
         "score": score["live"],
         "display": number(score["live"], 1),
+        "band": score_band(score["live"]),
+        "reference_band": score_band(score["reference"]),
         "reference_score": score["reference"],
+        "help": METRIC_HELP["score"],
         "target": score["target"],
         "components": {
-            name: {"value": value, "display": f"{value:.2f}", "weight": weights[name]}
+            name: {"value": value, "display": f"{value:.2f}", "weight": weights[name], "help": METRIC_HELP[name]}
             for name, value in score["components"].items()
         },
         "formula": f"Score = 100 × ({weights['energy']:.2f}·E + {weights['carbon']:.2f}·C + {weights['comfort']:.2f}·K)",
@@ -192,20 +227,30 @@ def day_label(day):
 
 
 def daily_chart(days):
-    labels = [day_label(day) for day, _ in days]
-    values = [total for _, total in days]
-    peak_day, peak = max(days, key=lambda item: item[1])
+    """Stacked bars of kWh per day, one segment per device type.
+
+    `days` is a list of (date, {category: kWh}) pairs, oldest first.
+    """
+    categories = [name for name in CATEGORIES if any(name in parts for _, parts in days)]
+    totals = [round(sum(parts.values()), 1) for _, parts in days]
+    peak_index = max(range(len(days)), key=lambda index: totals[index])
     return {
         "type": "bar",
-        "labels": labels,
-        "datasets": [{"key": "primary", "label": "Energy use", "data": values}],
+        "stacked": True,
+        "labels": [day_label(day) for day, _ in days],
+        "categories": categories,
+        "datasets": [
+            {"key": name, "label": CATEGORIES[name], "data": [round(parts.get(name, 0), 2) for _, parts in days]}
+            for name in categories
+        ],
+        "totals": totals,
         "unit": "kWh",
         "x_title": "Day",
         "y_title": "kWh",
         "limit": None,
         "above_limit": [],
-        "summary": f"Total {number(sum(values))} kWh over {len(days)} days. "
-        f"Highest: {number(peak)} kWh on {day_label(peak_day)}.",
+        "summary": f"Total {number(sum(totals))} kWh over {len(days)} days. "
+        f"Highest: {number(totals[peak_index])} kWh on {day_label(days[peak_index][0])}.",
     }
 
 
@@ -258,20 +303,42 @@ def alert_rows(alerts, today):
             "category_label": name,
             "value_kwh": alert["value_kwh"],
             "limit_kwh": alert["limit_kwh"],
-            "value_display": f"{number(alert['value_kwh'])} kWh",
-            "limit_display": f"{number(alert['limit_kwh'])} kWh",
-            "message": f"{name} above limit: {number(alert['value_kwh'])} kWh",
+            "value_display": f"{reading(alert['value_kwh'])} kWh",
+            "limit_display": f"{reading(alert['limit_kwh'])} kWh",
+            "message": f"{name} above limit: {reading(alert['value_kwh'])} kWh",
         })
     return rows
 
 
-def alert_banner(alert):
-    name = CATEGORIES[alert["category"]]
-    return {
-        "title": f"{name} is above the limit at {alert['time']:%H:%M}.",
-        "text": f"The {name.lower()} load ({number(alert['value_kwh'])} kWh) exceeds "
-        f"the defined limit of {number(alert['limit_kwh'])} kWh.",
-    }
+BANNER_LINES = 3
+
+
+def alert_banner(alerts):
+    """Dashboard banner listing today's alerts (latest first), or None when there are none.
+
+    `key` names the exact set of alerts, so the page can tell a new alert from one
+    the user already dismissed.
+    """
+    if not alerts:
+        return None
+    first = alerts[0]
+    name = CATEGORIES[first["category"]]
+    if len(alerts) == 1:
+        title = f"{name} is above the limit at {first['time']:%H:%M}."
+        text = (f"The {name.lower()} load ({reading(first['value_kwh'])} kWh) exceeds "
+                f"the defined limit of {reading(first['limit_kwh'])} kWh.")
+    else:
+        title = f"{len(alerts)} readings are above their limits today."
+        text = "Latest first."
+    lines = [
+        f"{alert['time']:%H:%M} {CATEGORIES[alert['category']]}: {reading(alert['value_kwh'])} kWh, "
+        f"limit {reading(alert['limit_kwh'])} kWh"
+        for alert in alerts[:BANNER_LINES]
+    ]
+    if len(alerts) > BANNER_LINES:
+        lines.append(f"and {len(alerts) - BANNER_LINES} more")
+    key = ";".join(f"{iso(alert['time'])}/{alert['category']}" for alert in alerts)
+    return {"key": key, "title": title, "text": text, "lines": lines if len(alerts) > 1 else []}
 
 
 def week_rows(comparison):
@@ -403,8 +470,8 @@ class ChartPresenter:
     def sparkline(self, values, days, show):
         return sparkline(values, days, show)
 
-    def kpi_cards(self, kpis, category=None, trend=None):
-        return kpi_cards(kpis, category, trend)
+    def kpi_cards(self, kpis, category=None, trend=None, weeks=None):
+        return kpi_cards(kpis, category, trend, weeks)
 
     def score_payload(self, score):
         return score_payload(score)

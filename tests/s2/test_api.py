@@ -20,6 +20,10 @@ def test_kpis_for_library(client):
     assert kpis["savings"]["display"] == "€0.35"
     assert kpis["savings"]["co2_display"] == "1.0"
     assert kpis["savings"]["scope"] == "building"
+    assert kpis["savings"]["negative"] is False
+    assert kpis["savings"]["week"] == {
+        "eur": 2.35, "co2_kg": 2.5, "display": "€2.35", "co2_display": "2.5", "negative": False,
+    }
 
 
 def test_kpis_for_category_keep_savings_building_wide(client):
@@ -37,8 +41,12 @@ def test_score(client):
     assert data["reference_score"] == 82
     assert 81.5 <= data["score"] <= 82.5
     assert data["display"] == f"{data['score']:.1f}"
+    assert data["band"]["band"] == "green"
+    assert data["reference_band"] == {"band": "green", "label": "Good", "needle_deg": 57.6}
     assert data["target"] == 90
-    assert data["components"]["energy"] == {"value": 0.86, "display": "0.86", "weight": 0.4}
+    energy = data["components"]["energy"]
+    assert (energy["value"], energy["display"], energy["weight"]) == (0.86, "0.86", 0.4)
+    assert energy["help"].startswith("E, weight 0.40")
     assert data["measured_at"].endswith(("+01:00", "+02:00"))
 
 
@@ -82,7 +90,17 @@ def test_aggregates_week(client):
         ("heating", 48), ("lighting", 20), ("servers", 22), ("other", 10),
     ]
     assert data["chart"]["datasets"][0]["data"] == [48, 20, 22, 10]
-    assert sum(data["daily_chart"]["datasets"][0]["data"]) == pytest.approx(103.3)
+    daily = data["daily_chart"]
+    assert daily["stacked"] is True
+    assert [s["key"] for s in daily["datasets"]] == ["heating", "lighting", "servers", "other"]
+    assert sum(daily["totals"]) == pytest.approx(103.3)
+    # Each day's segments add up to that day's total.
+    for index, total in enumerate(daily["totals"]):
+        assert sum(s["data"][index] for s in daily["datasets"]) == pytest.approx(total, abs=0.06)
+    # Each device type over the week matches the S1 weekly aggregate, up to rounding.
+    weekly = {row["id"]: row["kwh"] for row in data["categories"]}
+    for series in daily["datasets"]:
+        assert sum(series["data"]) == pytest.approx(weekly[series["key"]], abs=0.15)
 
 
 def test_aggregates_periods(client):
@@ -103,6 +121,12 @@ def test_alerts(client):
     assert first["time_label"] == "Today 13:00"
     assert first["message"] == "Heating above limit: 2.4 kWh"
     assert [alert["time_label"] for alert in data["alerts"]] == ["Today 13:00", "Yesterday 02:10", "Mon 6 May, 18:40"]
+    assert data["banner"] == {
+        "key": "2024-05-14T13:00:00+02:00/heating",
+        "title": "Heating is above the limit at 13:00.",
+        "text": "The heating load (2.4 kWh) exceeds the defined limit of 2.0 kWh.",
+        "lines": [],
+    }
 
 
 @pytest.mark.parametrize("url, code", [

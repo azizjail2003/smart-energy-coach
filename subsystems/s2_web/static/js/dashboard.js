@@ -59,6 +59,11 @@
       }
     });
     root.querySelector("[data-savings-co2]").textContent = kpis.savings.co2_display;
+    root.querySelector("[data-savings-today]").classList.toggle("is-negative", kpis.savings.negative);
+    const week = root.querySelector("[data-savings-week]");
+    week.querySelector("[data-week-eur]").textContent = kpis.savings.week.display;
+    week.querySelector("[data-week-co2]").textContent = kpis.savings.week.co2_display;
+    week.classList.toggle("is-negative", kpis.savings.week.negative);
     root.querySelector("[data-savings-scope]").hidden = !category;
   }
 
@@ -116,6 +121,9 @@
   const scoreValue = score.querySelector("[data-score-value]");
   const scoreTime = score.querySelector("[data-score-time]");
   const scoreError = score.querySelector("[data-score-error]");
+  const gauge = score.querySelector("[data-gauge]");
+  const gaugeNeedle = score.querySelector("[data-gauge-needle]");
+  const scoreBand = score.querySelector("[data-score-band]");
   let timer = null;
   let inFlight = false;
 
@@ -127,6 +135,9 @@
     try {
       const data = await fetchJSON(apiUrl("/api/score", { building }));
       scoreValue.textContent = data.display;
+      gauge.className = `gauge gauge--${data.band.band}`;
+      gaugeNeedle.style.transform = `rotate(${data.band.needle_deg}deg)`;
+      scoreBand.textContent = data.band.label;
       scoreTime.textContent = data.time_display;
       scoreTime.dateTime = data.measured_at;
       scoreError.hidden = true;
@@ -146,7 +157,7 @@
 
   function startPolling() {
     if (timer === null) {
-      timer = window.setInterval(pollScore, 10000);
+      timer = window.setInterval(refresh, 10000);
     }
   }
 
@@ -160,17 +171,52 @@
       stopPolling();
       setStatus("demo", "Live updates paused");
     } else {
-      pollScore();
+      refresh();
       startPolling();
     }
   });
 
+  // Alert banner: refreshed with the score, so a new alert shows within one 10 s cycle.
+  // Dismissing hides the alerts seen so far; a different set of alerts shows the banner again.
+
   const banner = root.querySelector("[data-banner]");
-  if (banner) {
-    banner.querySelector("[data-banner-close]").addEventListener("click", () => {
-      banner.remove();
-      document.getElementById("main").focus();
-    });
+  let dismissedKey = null;
+
+  function showBanner(data) {
+    const key = data ? data.key : "";
+    banner.dataset.bannerKey = key;
+    if (!data || key === dismissedKey) {
+      banner.hidden = true;
+      return;
+    }
+    banner.querySelector("[data-banner-title]").textContent = data.title;
+    banner.querySelector("[data-banner-text]").textContent = data.text;
+    banner.querySelector("[data-banner-list]").replaceChildren(...data.lines.map((text) => {
+      const line = document.createElement("li");
+      line.textContent = text;
+      return line;
+    }));
+    banner.hidden = false;
+  }
+
+  async function pollAlerts() {
+    try {
+      const data = await fetchJSON(apiUrl("/api/alerts", { building }));
+      showBanner(data.banner);
+    } catch (problem) {
+      // Keep the last banner; the score area already reports a failed refresh.
+    }
+  }
+
+  banner.querySelector("[data-banner-close]").addEventListener("click", () => {
+    dismissedKey = banner.dataset.bannerKey;
+    banner.hidden = true;
+    document.getElementById("main").focus();
+  });
+
+  function refresh() {
+    pollScore();
+    pollAlerts();
   }
 
   loadHourly();

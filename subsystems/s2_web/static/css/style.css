@@ -27,6 +27,10 @@
   --warn-tint: #fff3dc;
   --warn-ring: #f2c97d;
   --danger: #b42318;
+  /* Score gauge bands: below 60, 60–80, above 80 */
+  --band-red: #d92d20;
+  --band-amber: #f0a020;
+  --band-green: #2e9e55;
 
   --chart-compare: #8a847d;
   --chart-lighting: #f8a06b;
@@ -69,6 +73,9 @@
     --warn-tint: #352a17;
     --warn-ring: #5c4824;
     --danger: #f2877c;
+    --band-red: #f2877c;
+    --band-amber: #f2c063;
+    --band-green: #6cc489;
     --chart-compare: #948d86;
     --chart-servers: #a9a29a;
     --chart-other: #5c5650;
@@ -99,6 +106,9 @@
   --warn-tint: #352a17;
   --warn-ring: #5c4824;
   --danger: #f2877c;
+  --band-red: #f2877c;
+  --band-amber: #f2c063;
+  --band-green: #6cc489;
   --chart-compare: #948d86;
   --chart-servers: #a9a29a;
   --chart-other: #5c5650;
@@ -659,6 +669,28 @@ textarea {
 
 .tooltip.is-visible {
   opacity: 1;
+}
+
+/* Info button next to a metric name; its text appears in the tooltip above. */
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px 0 -4px 2px;
+  padding: 0;
+  vertical-align: middle;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: help;
+}
+
+.info-tip:hover {
+  color: var(--primary-ink);
+  background: var(--muted-bg);
 }
 
 /* Cards */
@@ -1253,6 +1285,20 @@ tbody tr:hover {
   margin-top: 1px;
 }
 
+.banner[hidden] {
+  display: none;
+}
+
+.banner__list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.banner__list:empty {
+  display: none;
+}
+
 .banner__close {
   display: grid;
   flex: none;
@@ -1343,6 +1389,30 @@ tbody tr:hover {
 .kpi__scope {
   color: var(--muted);
   font-size: 12px;
+}
+
+.kpi__week {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi__week strong {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.kpi__week-note {
+  white-space: nowrap;
+}
+
+/* Negative savings (more use than the baseline) are shown in red. */
+.kpi__value.is-negative,
+.kpi__week.is-negative strong {
+  color: var(--danger);
 }
 
 /* Seven-day trend inside a KPI card: runs edge to edge, fades from the brand colour to the card. */
@@ -1450,6 +1520,85 @@ tbody tr:hover {
   color: var(--brand);
   font: 700 46px/1 var(--font-heading);
   letter-spacing: -0.03em;
+}
+
+/* Score gauge: three coloured bands, a needle and the value under it. */
+
+.gauge {
+  display: grid;
+  justify-items: center;
+  width: 180px;
+}
+
+.gauge__dial {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.gauge__band {
+  fill: none;
+  stroke-width: 16;
+}
+
+.gauge__band--red { stroke: var(--band-red); }
+.gauge__band--amber { stroke: var(--band-amber); }
+.gauge__band--green { stroke: var(--band-green); }
+
+.gauge__needle {
+  stroke: var(--text);
+  stroke-width: 4;
+  stroke-linecap: round;
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  transition: transform 400ms ease-out;
+}
+
+.gauge__hub {
+  fill: var(--text);
+}
+
+.gauge .score__value {
+  margin: 2px 0 0;
+}
+
+.gauge--red .score__value span { color: var(--danger); }
+.gauge--amber .score__value span { color: var(--warn); }
+.gauge--green .score__value span { color: var(--ok); }
+
+.gauge__band-label {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gauge--red .gauge__band-label { color: var(--danger); }
+.gauge--amber .gauge__band-label { color: var(--warn); }
+.gauge--green .gauge__band-label { color: var(--ok); }
+
+.score__legend dd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 4px;
+  border-radius: 3px;
+}
+
+.swatch--red { background: var(--band-red); }
+.swatch--amber { background: var(--band-amber); }
+.swatch--green { background: var(--band-green); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge__needle { transition: none; }
 }
 
 .score__meta {
