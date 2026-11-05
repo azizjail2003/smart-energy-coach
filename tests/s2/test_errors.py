@@ -8,11 +8,11 @@ from subsystems.s2_web.services.coach import MockAICoach
 
 
 def s1_is_down(*args, **kwargs):
-    raise ServiceUnavailableError("The analytics service (S1) did not answer.")
+    raise ConnectionError("connection refused")
 
 
 def s3_is_down(*args, **kwargs):
-    raise ServiceUnavailableError("The AI coach (S3) did not answer.")
+    raise TimeoutError("no answer after 10 s")
 
 
 # -- The error classes ---------------------------------------------------------------
@@ -115,7 +115,7 @@ def test_analytics_down_returns_503(client, monkeypatch):
     api = client.get("/api/kpis?building=library")
     assert api.status_code == 503
     assert api.get_json()["error"] == {
-        "code": "service_unavailable", "message": "The analytics service (S1) did not answer.",
+        "code": "service_unavailable", "message": "The analytics service (S1) did not answer. Try again in a moment.",
     }
     page = client.get("/")
     assert page.status_code == 503
@@ -132,4 +132,8 @@ def test_ai_coach_down_returns_503(client, monkeypatch):
         headers={"X-CSRFToken": token},
     )
     assert response.status_code == 503
-    assert response.get_json()["error"]["message"] == "The AI coach (S3) did not answer."
+    assert response.get_json()["error"]["message"] == "The AI coach (S3) did not answer. Try again in a moment."
+    # The dashboard still loads; only the coach tip says it is unavailable.
+    dashboard = client.get("/")
+    assert dashboard.status_code == 200
+    assert b"The AI coach is not available right now." in dashboard.data

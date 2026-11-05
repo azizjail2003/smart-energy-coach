@@ -60,7 +60,7 @@ def create_app(test_config=None):
                    "building_source": None, "report_date": None, "report_date_display": ""}
         try:
             kpis = get_analytics().get_kpis(building)
-        except ServiceUnavailableError:
+        except (ServiceUnavailableError, ConnectionError, TimeoutError):
             return context  # the error page still renders while S1 is down, just without the date
         report_date = kpis["date"]
         context.update(

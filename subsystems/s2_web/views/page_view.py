@@ -2,6 +2,7 @@
 from datetime import timedelta
 
 from subsystems.s2_web.catalog import CATEGORIES, HISTORY_PERIODS, PERIOD_DAYS
+from subsystems.s2_web.errors import ServiceUnavailableError
 from subsystems.s2_web.presenter import ChartPresenter, alert_banner, building_info, category_rows, day_label, iso
 from subsystems.s2_web.presenter import scenario_rows, scenario_summary, week_rows
 from subsystems.s2_web.views.coach_view import CoachView
@@ -64,8 +65,16 @@ class PageView:
 
     # -- helpers -----------------------------------------------------------------
 
+    def kpis(self, building):
+        """Today's figures from S1. Every page and endpoint starts here, so a lost
+        connection to S1 is turned into a ServiceUnavailableError in this one place."""
+        try:
+            return self._analytics.get_kpis(building)
+        except (ConnectionError, TimeoutError) as error:
+            raise ServiceUnavailableError("The analytics service (S1) did not answer. Try again in a moment.") from error
+
     def report_date(self, building):
-        return self._analytics.get_kpis(building)["date"]
+        return self.kpis(building)["date"]
 
     def todays_alerts(self, building, kpis):
         """Alerts from the report date, latest first."""
@@ -74,7 +83,7 @@ class PageView:
 
     def building(self, building):
         """Building header used by every JSON response."""
-        kpis = self._analytics.get_kpis(building)
+        kpis = self.kpis(building)
         return kpis, building_info(building, kpis["source"])
 
     # -- pages --------------------------------------------------------------------
@@ -82,7 +91,7 @@ class PageView:
     def index(self, building, category=None):
         """Template context for the dashboard."""
         analytics, presenter = self._analytics, self._presenter
-        kpis = analytics.get_kpis(building)
+        kpis = self.kpis(building)
         context = {
             "page": "dashboard",
             "building": building,
@@ -98,7 +107,11 @@ class PageView:
         }
         if self._coach is not None:
             status = self._coach.status()
-            headline, detail = self._coach.preview(building)
+            try:
+                headline, detail = self._coach.preview(building)
+            except ServiceUnavailableError:
+                # The dashboard still works without S3; only the tip is missing.
+                headline, detail = "The AI coach is not available right now.", "Tips will appear here again once it answers."
             context.update(
                 coach_status=status["status"],
                 coach_status_label=status["label"],
