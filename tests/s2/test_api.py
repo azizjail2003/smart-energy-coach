@@ -20,6 +20,10 @@ def test_kpis_for_library(client):
     assert kpis["savings"]["display"] == "€0.35"
     assert kpis["savings"]["co2_display"] == "1.0"
     assert kpis["savings"]["scope"] == "building"
+    assert kpis["savings"]["negative"] is False
+    assert kpis["savings"]["week"] == {
+        "eur": 2.35, "co2_kg": 2.5, "display": "€2.35", "co2_display": "2.5", "negative": False,
+    }
 
 
 def test_kpis_for_category_keep_savings_building_wide(client):

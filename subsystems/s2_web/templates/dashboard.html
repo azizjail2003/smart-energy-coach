@@ -86,11 +86,12 @@
         {{ sparkline("savings", kpis.savings.spark) }}
         <div class="kpi__foot">
           <div>
-            <p class="kpi__value"><span data-value>{{ kpis.savings.display }}</span></p>
+            <p class="kpi__value{{ ' is-negative' if kpis.savings.negative }}" data-savings-today><span data-value>{{ kpis.savings.display }}</span></p>
             <p class="kpi__sub"><strong data-savings-co2>{{ kpis.savings.co2_display }}</strong> kg CO₂</p>
           </div>
           {{ kpi_change(kpis.savings) }}
         </div>
+        <p class="kpi__week{{ ' is-negative' if kpis.savings.week.negative }}" data-savings-week>This week: <strong data-week-eur>{{ kpis.savings.week.display }}</strong> · <span data-week-co2>{{ kpis.savings.week.co2_display }}</span> kg CO₂ <span class="kpi__week-note">vs last week</span></p>
         <p class="kpi__scope" data-savings-scope{% if not category %} hidden{% endif %}>Building-wide value</p>
       </article>
     </div>

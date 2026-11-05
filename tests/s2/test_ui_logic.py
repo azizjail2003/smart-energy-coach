@@ -60,3 +60,22 @@ def test_score_band_needle_spans_the_half_circle():
     assert presenter.score_band(50)["needle_deg"] == 0
     assert presenter.score_band(100)["needle_deg"] == 90
     assert presenter.score_band(130)["needle_deg"] == 90  # clamped to the dial
+
+
+def test_money_keeps_the_sign_in_front():
+    assert presenter.money(2.35) == "€2.35"
+    assert presenter.money(-0.2) == "−€0.20"
+    assert presenter.money(-0.001) == "€0.00"
+
+
+def test_week_savings_compare_with_last_week():
+    weeks = {
+        "last_week": {"energy_kwh": 109.9, "co2_kg": 41.8, "cost_eur": 38.50},
+        "this_week": {"energy_kwh": 103.3, "co2_kg": 39.3, "cost_eur": 36.15},
+    }
+    assert presenter.week_savings(weeks) == {
+        "eur": 2.35, "co2_kg": 2.5, "display": "€2.35", "co2_display": "2.5", "negative": False,
+    }
+    worse = {"last_week": weeks["this_week"], "this_week": weeks["last_week"]}
+    assert presenter.week_savings(worse)["display"] == "−€2.35"
+    assert presenter.week_savings(worse)["negative"] is True

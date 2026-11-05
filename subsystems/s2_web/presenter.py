@@ -32,6 +32,11 @@ def euro(value):
     return f"€{value:.2f}"
 
 
+def money(value):
+    """Euro amount that keeps its sign in front of the symbol, e.g. −€0.20."""
+    return (MINUS if round(value, 2) < 0 else "") + euro(abs(value))
+
+
 def trend(change):
     if change < 0:
         return "down"
@@ -60,7 +65,15 @@ def metric(value, unit, display, change_pct, compared_to):
     }
 
 
-def kpi_cards(kpis, category=None, trend=None):
+def week_savings(comparison):
+    """€ and kg CO₂ saved this week against last week. Negative when this week used more."""
+    last, this = comparison["last_week"], comparison["this_week"]
+    eur = round(last["cost_eur"] - this["cost_eur"], 2)
+    co2 = round(last["co2_kg"] - this["co2_kg"], 1)
+    return {"eur": eur, "co2_kg": co2, "display": money(eur), "co2_display": number(co2), "negative": eur < 0}
+
+
+def kpi_cards(kpis, category=None, trend=None, weeks=None):
     values = kpis["by_category"][category] if category else kpis
     change = values["change_pct"]
     savings = kpis["savings"]
@@ -69,12 +82,15 @@ def kpi_cards(kpis, category=None, trend=None):
         "co2": metric(values["co2_kg"], "kg", number(values["co2_kg"]), change, "vs last week"),
         "cost": metric(values["cost_eur"], "EUR", euro(values["cost_eur"]), change, "vs last week"),
         "savings": {
-            **metric(savings["eur"], "EUR", euro(savings["eur"]), savings["change_pct"], "vs normal use"),
+            **metric(savings["eur"], "EUR", money(savings["eur"]), savings["change_pct"], "vs normal use"),
             "co2_kg": savings["co2_kg"],
             "co2_display": number(savings["co2_kg"]),
+            "negative": savings["eur"] < 0,
             "scope": "building",
         },
     }
+    if weeks:
+        cards["savings"]["week"] = week_savings(weeks)
     if trend:
         days = [day_label(entry["date"]) for entry in trend]
         for name, key, show in (
@@ -416,8 +432,8 @@ class ChartPresenter:
     def sparkline(self, values, days, show):
         return sparkline(values, days, show)
 
-    def kpi_cards(self, kpis, category=None, trend=None):
-        return kpi_cards(kpis, category, trend)
+    def kpi_cards(self, kpis, category=None, trend=None, weeks=None):
+        return kpi_cards(kpis, category, trend, weeks)
 
     def score_payload(self, score):
         return score_payload(score)

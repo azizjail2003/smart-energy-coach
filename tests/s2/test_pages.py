@@ -21,6 +21,8 @@ def test_dashboard_shows_reference_figures(client):
         assert text in html
     assert '<span data-score-value>82</span> / 100' in html
     assert "Lower the heating by 1 °C between 13:00 and 17:00." in html
+    assert '<strong data-week-eur>€2.35</strong>' in html
+    assert "gauge gauge--green" in html
 
 
 def test_history_shows_alerts_and_week_comparison(client):

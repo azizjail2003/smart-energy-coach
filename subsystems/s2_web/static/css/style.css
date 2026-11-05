@@ -1355,6 +1355,30 @@ tbody tr:hover {
   font-size: 12px;
 }
 
+.kpi__week {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi__week strong {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.kpi__week-note {
+  white-space: nowrap;
+}
+
+/* Negative savings (more use than the baseline) are shown in red. */
+.kpi__value.is-negative,
+.kpi__week.is-negative strong {
+  color: var(--danger);
+}
+
 /* Seven-day trend inside a KPI card: runs edge to edge, fades from the brand colour to the card. */
 .spark {
   position: relative;

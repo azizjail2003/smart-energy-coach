@@ -59,6 +59,11 @@
       }
     });
     root.querySelector("[data-savings-co2]").textContent = kpis.savings.co2_display;
+    root.querySelector("[data-savings-today]").classList.toggle("is-negative", kpis.savings.negative);
+    const week = root.querySelector("[data-savings-week]");
+    week.querySelector("[data-week-eur]").textContent = kpis.savings.week.display;
+    week.querySelector("[data-week-co2]").textContent = kpis.savings.week.co2_display;
+    week.classList.toggle("is-negative", kpis.savings.week.negative);
     root.querySelector("[data-savings-scope]").hidden = !category;
   }
 

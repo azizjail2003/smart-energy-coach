@@ -84,7 +84,10 @@ class PageView:
             "building": building,
             "category": category,
             "categories": CATEGORIES,
-            "kpis": presenter.kpi_cards(kpis, category, analytics.get_daily_trend(building, category=category)),
+            "kpis": presenter.kpi_cards(
+                kpis, category, analytics.get_daily_trend(building, category=category),
+                analytics.get_week_comparison(building),
+            ),
             "score": presenter.score_payload(analytics.get_score(building)),
             "banner": alert_banner(todays_alerts[0]) if todays_alerts else None,
             "report_day": kpis["date"].isoformat(),
@@ -144,7 +147,7 @@ class PageView:
             "building": info,
             "date": kpis["date"].isoformat(),
             "category": category or "all",
-            "kpis": self._presenter.kpi_cards(kpis, category, trend),
+            "kpis": self._presenter.kpi_cards(kpis, category, trend, self._analytics.get_week_comparison(building)),
         }
 
     def api_score(self, building):
