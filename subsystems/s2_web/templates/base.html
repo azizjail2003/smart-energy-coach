@@ -71,11 +71,13 @@
           </span>
           <button class="button button--secondary no-js-only" type="submit">Show</button>
         </form>
+        {% if report_date %}
         <p class="report-date">
           {{ icon("calendar", 18) }}
           <span class="visually-hidden">Report date:</span>
           <time datetime="{{ report_date.isoformat() }}">{{ report_date_display }}</time>
         </p>
+        {% endif %}
       </div>
     </header>
 
