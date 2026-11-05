@@ -6,7 +6,7 @@ the same way everywhere and chart data is built in one place.
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, TIMEZONE
+from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, METRIC_HELP, TIMEZONE
 
 MINUS = "−"
 
@@ -79,7 +79,7 @@ def kpi_cards(kpis, category=None, trend=None, weeks=None):
     savings = kpis["savings"]
     cards = {
         "energy": metric(values["energy_kwh"], "kWh", number(values["energy_kwh"]), change, "vs last week"),
-        "co2": metric(values["co2_kg"], "kg", number(values["co2_kg"]), change, "vs last week"),
+        "co2": {**metric(values["co2_kg"], "kg", number(values["co2_kg"]), change, "vs last week"), "help": METRIC_HELP["co2"]},
         "cost": metric(values["cost_eur"], "EUR", euro(values["cost_eur"]), change, "vs last week"),
         "savings": {
             **metric(savings["eur"], "EUR", money(savings["eur"]), savings["change_pct"], "vs normal use"),
@@ -163,9 +163,10 @@ def score_payload(score):
         "band": score_band(score["live"]),
         "reference_band": score_band(score["reference"]),
         "reference_score": score["reference"],
+        "help": METRIC_HELP["score"],
         "target": score["target"],
         "components": {
-            name: {"value": value, "display": f"{value:.2f}", "weight": weights[name]}
+            name: {"value": value, "display": f"{value:.2f}", "weight": weights[name], "help": METRIC_HELP[name]}
             for name, value in score["components"].items()
         },
         "formula": f"Score = 100 × ({weights['energy']:.2f}·E + {weights['carbon']:.2f}·C + {weights['comfort']:.2f}·K)",

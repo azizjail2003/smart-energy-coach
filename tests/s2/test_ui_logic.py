@@ -79,3 +79,26 @@ def test_week_savings_compare_with_last_week():
     worse = {"last_week": weeks["this_week"], "this_week": weeks["last_week"]}
     assert presenter.week_savings(worse)["display"] == "−€2.35"
     assert presenter.week_savings(worse)["negative"] is True
+
+
+def test_score_and_parts_carry_tooltip_text():
+    from datetime import datetime, timezone
+    score = {
+        "live": 82.1, "reference": 82, "target": 90,
+        "weights": {"energy": 0.40, "carbon": 0.35, "comfort": 0.25},
+        "components": {"energy": 0.86, "carbon": 0.81, "comfort": 0.78},
+        "measured_at": datetime(2024, 5, 14, 12, 0, tzinfo=timezone.utc),
+    }
+    payload = presenter.score_payload(score)
+    assert "Red below 60" in payload["help"]
+    assert payload["components"]["energy"]["help"].startswith("E, weight 0.40")
+    assert payload["components"]["carbon"]["help"].startswith("C, weight 0.35")
+    assert payload["components"]["comfort"]["help"].startswith("K, weight 0.25")
+
+
+def test_co2_card_explains_the_factor():
+    kpis = {
+        "energy_kwh": 15.7, "co2_kg": 6.0, "cost_eur": 5.5, "change_pct": -6,
+        "savings": {"eur": 0.35, "co2_kg": 1.0, "change_pct": -6}, "by_category": {},
+    }
+    assert "0.38 kg CO₂ per kWh" in presenter.kpi_cards(kpis)["co2"]["help"]

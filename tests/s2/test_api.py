@@ -44,7 +44,9 @@ def test_score(client):
     assert data["band"]["band"] == "green"
     assert data["reference_band"] == {"band": "green", "label": "Good", "needle_deg": 57.6}
     assert data["target"] == 90
-    assert data["components"]["energy"] == {"value": 0.86, "display": "0.86", "weight": 0.4}
+    energy = data["components"]["energy"]
+    assert (energy["value"], energy["display"], energy["weight"]) == (0.86, "0.86", 0.4)
+    assert energy["help"].startswith("E, weight 0.40")
     assert data["measured_at"].endswith(("+01:00", "+02:00"))
 
 

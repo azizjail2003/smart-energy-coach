@@ -671,6 +671,28 @@ textarea {
   opacity: 1;
 }
 
+/* Info button next to a metric name; its text appears in the tooltip above. */
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px 0 -4px 2px;
+  padding: 0;
+  vertical-align: middle;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: help;
+}
+
+.info-tip:hover {
+  color: var(--primary-ink);
+  background: var(--muted-bg);
+}
+
 /* Cards */
 
 .card {

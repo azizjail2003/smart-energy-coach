@@ -23,6 +23,9 @@ def test_dashboard_shows_reference_figures(client):
     assert "Lower the heating by 1 °C between 13:00 and 17:00." in html
     assert '<strong data-week-eur>€2.35</strong>' in html
     assert "gauge gauge--green" in html
+    # Tooltips on the score, each of E, C and K, and CO₂ (S2-NFR7).
+    assert html.count("data-tip-info") == 5
+    assert 'aria-label="About comfort: K, weight 0.25' in html
 
 
 def test_history_shows_alerts_and_week_comparison(client):

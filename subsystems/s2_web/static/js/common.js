@@ -353,8 +353,9 @@ window.SEM = (function () {
       tip.classList.remove("is-visible");
     }
 
-    function show(target) {
-      if (narrowScreen.matches || ("tipRail" in target.dataset && root.dataset.railHover !== "off")) {
+    // `force` is used when an info button is tapped, so its text also shows on phones.
+    function show(target, force = false) {
+      if ((narrowScreen.matches && !force) || ("tipRail" in target.dataset && root.dataset.railHover !== "off")) {
         return;
       }
       window.clearTimeout(timer);
@@ -379,6 +380,9 @@ window.SEM = (function () {
         }
       });
       target.addEventListener("blur", hide);
+      if ("tipInfo" in target.dataset) {
+        target.addEventListener("click", () => show(target, true));
+      }
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {

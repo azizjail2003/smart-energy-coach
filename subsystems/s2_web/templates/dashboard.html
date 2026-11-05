@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icon, trend, status_pill, chart_area %}
+{% from "_macros.html" import icon, trend, status_pill, chart_area, info_tip %}
 
 {% block title %}Dashboard{% endblock %}
 {% block heading %}Dashboard{% endblock %}
@@ -66,7 +66,7 @@
         </div>
       </article>
       <article class="card kpi" data-kpi="co2">
-        <h3 class="kpi__label">{{ icon("leaf") }}CO₂ today</h3>
+        <h3 class="kpi__label">{{ icon("leaf") }}CO₂ today {{ info_tip("CO₂", kpis.co2.help) }}</h3>
         {{ sparkline("co2", kpis.co2.spark) }}
         <div class="kpi__foot">
           <p class="kpi__value"><span data-value>{{ kpis.co2.display }}</span><span class="kpi__unit"> kg</span></p>
@@ -99,7 +99,7 @@
   </section>
 
   <section class="card score" aria-labelledby="score-title" data-score>
-    <h2 class="card__title" id="score-title">{{ icon("leaf") }}Sustainability Score</h2>
+    <h2 class="card__title">{{ icon("leaf") }}<span id="score-title">Sustainability Score</span> {{ info_tip("the score", score.help) }}</h2>
     <div class="score__main">
       {# Half-circle gauge 0–100: red below 60, amber 60–80, green above 80. #}
       <div class="gauge gauge--{{ score.reference_band.band }}" data-gauge>
@@ -122,7 +122,7 @@
     <p class="score__scope">{{ score.label }}. Shows the reference score until the first live reading (every 10 seconds).</p>
     <dl class="score__parts">
       {% for name, part in score.components.items() %}
-      <dt>{{ name | capitalize }}</dt>
+      <dt>{{ name | capitalize }} ({{ {"energy": "E", "carbon": "C", "comfort": "K"}[name] }}) {{ info_tip(name, part.help) }}</dt>
       <dd><span class="meter"><span style="width: {{ (part.value * 100) | round(0) }}%"></span></span></dd>
       <dd>{{ part.display }}</dd>
       {% endfor %}
