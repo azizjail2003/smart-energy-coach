@@ -91,6 +91,26 @@ def test_settings_save_limits_for_session(client, csrf_token):
     assert all(alert["category"] != "heating" for alert in alerts["alerts"])
 
 
+def test_new_alert_reaches_the_banner_on_the_next_refresh(client, csrf_token):
+    # The dashboard polls /api/alerts every 10 s, so a lower limit shows up in the banner without a reload.
+    before = client.get("/api/alerts?building=library").get_json()["banner"]
+    limits = {"heating": "2.0", "lighting": "0.2", "servers": "3.5", "other": "1.0"}
+    client.post("/settings", data={"csrf_token": csrf_token, **limits})
+    after = client.get("/api/alerts?building=library").get_json()["banner"]
+    assert after["key"] != before["key"]
+    assert after["title"] == "10 readings are above their limits today."
+    assert after["lines"][0] == "17:00 Lighting: 0.22 kWh, limit 0.2 kWh"
+    assert after["lines"][-1] == "and 7 more"
+
+
+def test_dashboard_hides_the_banner_without_alerts(client, csrf_token):
+    limits = {"heating": "20", "lighting": "20", "servers": "20", "other": "20"}
+    client.post("/settings", data={"csrf_token": csrf_token, **limits})
+    html = client.get("/").get_data(as_text=True)
+    assert 'data-banner data-banner-key="" hidden' in html
+    assert client.get("/api/alerts?building=library").get_json()["banner"] is None
+
+
 def test_settings_limits_survive_a_new_app_instance(client, csrf_token):
     limits = {"heating": "1.5", "lighting": "0.8", "servers": "3.5", "other": "1.0"}
     client.post("/settings", data={"csrf_token": csrf_token, **limits})

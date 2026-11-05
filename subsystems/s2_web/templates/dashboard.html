@@ -36,16 +36,18 @@
 {% block content %}
 <div class="dashboard" data-dashboard data-building="{{ building }}" data-day="{{ report_day }}" data-category="{{ category or '' }}">
 
-  {% if banner %}
-  <section class="banner" aria-labelledby="banner-title" data-banner>
+  {# Always in the page so the 10 s refresh can show a new alert; hidden while there are none. #}
+  <section class="banner" aria-labelledby="banner-title" aria-live="polite" data-banner data-banner-key="{{ banner.key if banner else '' }}"{% if not banner %} hidden{% endif %}>
     {{ icon("alert", 28) }}
     <div>
-      <h2 class="banner__title" id="banner-title">{{ banner.title }}</h2>
-      <p class="banner__text">{{ banner.text }} <a href="{{ url_for('pages.history') }}">See all alerts</a></p>
+      <h2 class="banner__title" id="banner-title" data-banner-title>{{ banner.title if banner }}</h2>
+      <p class="banner__text"><span data-banner-text>{{ banner.text if banner }}</span> <a href="{{ url_for('pages.history') }}">See all alerts</a></p>
+      <ul class="banner__list" data-banner-list>
+        {% for line in (banner.lines if banner else []) %}<li>{{ line }}</li>{% endfor %}
+      </ul>
     </div>
-    <button class="banner__close" type="button" aria-label="Dismiss alert" data-banner-close>{{ icon("x") }}</button>
+    <button class="banner__close" type="button" aria-label="Dismiss alerts" data-banner-close>{{ icon("x") }}</button>
   </section>
-  {% endif %}
 
   <section class="kpis" aria-labelledby="kpis-title">
     <h2 class="visually-hidden" id="kpis-title">Today's figures</h2>

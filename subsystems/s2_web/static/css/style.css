@@ -1285,6 +1285,20 @@ tbody tr:hover {
   margin-top: 1px;
 }
 
+.banner[hidden] {
+  display: none;
+}
+
+.banner__list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.banner__list:empty {
+  display: none;
+}
+
 .banner__close {
   display: grid;
   flex: none;

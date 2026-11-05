@@ -102,3 +102,22 @@ def test_co2_card_explains_the_factor():
         "savings": {"eur": 0.35, "co2_kg": 1.0, "change_pct": -6}, "by_category": {},
     }
     assert "0.38 kg CO₂ per kWh" in presenter.kpi_cards(kpis)["co2"]["help"]
+
+
+def test_alert_banner_lists_several_alerts_latest_first():
+    from datetime import datetime, timezone
+    alerts = [
+        {"time": datetime(2024, 5, 14, 13, 0, tzinfo=timezone.utc), "category": "heating", "value_kwh": 2.4, "limit_kwh": 2.0},
+        {"time": datetime(2024, 5, 14, 9, 0, tzinfo=timezone.utc), "category": "other", "value_kwh": 0.6, "limit_kwh": 0.5},
+    ]
+    banner = presenter.alert_banner(alerts)
+    assert banner["title"] == "2 readings are above their limits today."
+    assert banner["lines"] == ["13:00 Heating: 2.4 kWh, limit 2.0 kWh", "09:00 Other: 0.6 kWh, limit 0.5 kWh"]
+    assert banner["key"] == "2024-05-14T13:00:00+00:00/heating;2024-05-14T09:00:00+00:00/other"
+    assert presenter.alert_banner([]) is None
+
+
+def test_reading_keeps_a_second_decimal_only_when_needed():
+    assert presenter.reading(2.4) == "2.4"
+    assert presenter.reading(0.22) == "0.22"
+    assert presenter.reading(2.0) == "2.0"

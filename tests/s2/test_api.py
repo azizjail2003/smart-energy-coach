@@ -111,6 +111,12 @@ def test_alerts(client):
     assert first["time_label"] == "Today 13:00"
     assert first["message"] == "Heating above limit: 2.4 kWh"
     assert [alert["time_label"] for alert in data["alerts"]] == ["Today 13:00", "Yesterday 02:10", "Mon 6 May, 18:40"]
+    assert data["banner"] == {
+        "key": "2024-05-14T13:00:00+02:00/heating",
+        "title": "Heating is above the limit at 13:00.",
+        "text": "The heating load (2.4 kWh) exceeds the defined limit of 2.0 kWh.",
+        "lines": [],
+    }
 
 
 @pytest.mark.parametrize("url, code", [

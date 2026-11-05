@@ -157,7 +157,7 @@
 
   function startPolling() {
     if (timer === null) {
-      timer = window.setInterval(pollScore, 10000);
+      timer = window.setInterval(refresh, 10000);
     }
   }
 
@@ -171,17 +171,52 @@
       stopPolling();
       setStatus("demo", "Live updates paused");
     } else {
-      pollScore();
+      refresh();
       startPolling();
     }
   });
 
+  // Alert banner: refreshed with the score, so a new alert shows within one 10 s cycle.
+  // Dismissing hides the alerts seen so far; a different set of alerts shows the banner again.
+
   const banner = root.querySelector("[data-banner]");
-  if (banner) {
-    banner.querySelector("[data-banner-close]").addEventListener("click", () => {
-      banner.remove();
-      document.getElementById("main").focus();
-    });
+  let dismissedKey = null;
+
+  function showBanner(data) {
+    const key = data ? data.key : "";
+    banner.dataset.bannerKey = key;
+    if (!data || key === dismissedKey) {
+      banner.hidden = true;
+      return;
+    }
+    banner.querySelector("[data-banner-title]").textContent = data.title;
+    banner.querySelector("[data-banner-text]").textContent = data.text;
+    banner.querySelector("[data-banner-list]").replaceChildren(...data.lines.map((text) => {
+      const line = document.createElement("li");
+      line.textContent = text;
+      return line;
+    }));
+    banner.hidden = false;
+  }
+
+  async function pollAlerts() {
+    try {
+      const data = await fetchJSON(apiUrl("/api/alerts", { building }));
+      showBanner(data.banner);
+    } catch (problem) {
+      // Keep the last banner; the score area already reports a failed refresh.
+    }
+  }
+
+  banner.querySelector("[data-banner-close]").addEventListener("click", () => {
+    dismissedKey = banner.dataset.bannerKey;
+    banner.hidden = true;
+    document.getElementById("main").focus();
+  });
+
+  function refresh() {
+    pollScore();
+    pollAlerts();
   }
 
   loadHourly();

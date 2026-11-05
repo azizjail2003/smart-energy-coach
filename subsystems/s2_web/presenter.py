@@ -22,6 +22,11 @@ def number(value, decimals=1):
     return text
 
 
+def reading(value):
+    """kWh reading with one decimal, or two when one would hide the difference (0.22 not 0.2)."""
+    return number(value, 1 if round(value, 1) == round(value, 2) else 2)
+
+
 def signed(value, decimals=1):
     if round(value, decimals) > 0:
         return "+" + number(value, decimals)
@@ -288,20 +293,42 @@ def alert_rows(alerts, today):
             "category_label": name,
             "value_kwh": alert["value_kwh"],
             "limit_kwh": alert["limit_kwh"],
-            "value_display": f"{number(alert['value_kwh'])} kWh",
-            "limit_display": f"{number(alert['limit_kwh'])} kWh",
-            "message": f"{name} above limit: {number(alert['value_kwh'])} kWh",
+            "value_display": f"{reading(alert['value_kwh'])} kWh",
+            "limit_display": f"{reading(alert['limit_kwh'])} kWh",
+            "message": f"{name} above limit: {reading(alert['value_kwh'])} kWh",
         })
     return rows
 
 
-def alert_banner(alert):
-    name = CATEGORIES[alert["category"]]
-    return {
-        "title": f"{name} is above the limit at {alert['time']:%H:%M}.",
-        "text": f"The {name.lower()} load ({number(alert['value_kwh'])} kWh) exceeds "
-        f"the defined limit of {number(alert['limit_kwh'])} kWh.",
-    }
+BANNER_LINES = 3
+
+
+def alert_banner(alerts):
+    """Dashboard banner listing today's alerts (latest first), or None when there are none.
+
+    `key` names the exact set of alerts, so the page can tell a new alert from one
+    the user already dismissed.
+    """
+    if not alerts:
+        return None
+    first = alerts[0]
+    name = CATEGORIES[first["category"]]
+    if len(alerts) == 1:
+        title = f"{name} is above the limit at {first['time']:%H:%M}."
+        text = (f"The {name.lower()} load ({reading(first['value_kwh'])} kWh) exceeds "
+                f"the defined limit of {reading(first['limit_kwh'])} kWh.")
+    else:
+        title = f"{len(alerts)} readings are above their limits today."
+        text = "Latest first."
+    lines = [
+        f"{alert['time']:%H:%M} {CATEGORIES[alert['category']]}: {reading(alert['value_kwh'])} kWh, "
+        f"limit {reading(alert['limit_kwh'])} kWh"
+        for alert in alerts[:BANNER_LINES]
+    ]
+    if len(alerts) > BANNER_LINES:
+        lines.append(f"and {len(alerts) - BANNER_LINES} more")
+    key = ";".join(f"{iso(alert['time'])}/{alert['category']}" for alert in alerts)
+    return {"key": key, "title": title, "text": text, "lines": lines if len(alerts) > 1 else []}
 
 
 def week_rows(comparison):
