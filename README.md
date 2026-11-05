@@ -164,6 +164,24 @@ wsgi.py                entry point for flask run and Gunicorn
 
 Pages: Dashboard `/`, History & Alerts `/history`, Scenarios `/scenarios`, AI Coach `/coach`, Settings `/settings`. Every page accepts `?building=`; the choice is kept in the session.
 
+### Click path
+
+Every page is one click away in the navigation rail on the left, and every feature is reached in at most two clicks from the dashboard, within the limit of three (S2-NFR2). Typing in a field is not counted as a click. Start the app, open `http://127.0.0.1:5000/` and follow these steps:
+
+| Feature | Clicks from the dashboard | What you should see |
+|---|---|---|
+| Today's figures, score gauge and alert banner | 0 | Four KPI cards (15.7 kWh, 6.0 kg CO₂, €5.50, €0.35 saved, €2.35 this week), the score gauge at 82 in the green band, and the banner "Heating is above the limit at 13:00." |
+| Explain a metric | 1: the ⓘ next to Sustainability Score, Energy (E), Carbon (C), Comfort (K) or CO₂ today | A tooltip with the formula behind the number |
+| Filter by device type | 1: the Heating chip | The cards, trend lines and hourly chart switch to heating only (7.5 kWh) |
+| Compare with last week | 1: untick "Compare with last week" | The dashed last-week line disappears from the hourly chart |
+| Switch building | 2: building menu at the top, then Lab Building | Every figure changes to the Lab Building demo data |
+| Daily use by device type | 2: History & Alerts, then Last 7 days | Stacked bars per day; hovering a bar shows each device type and the day's total |
+| Alerts and week-over-week table | 1: History & Alerts | Three alerts (latest first) and last week vs this week (109.9 → 103.3 kWh) |
+| What-if scenario | 2: Scenarios, then Calculate scenario after typing −1 and 20 | Before/after: 15.7 → 14.6 kWh, score 82 → 87 |
+| Ask the AI coach | 2: AI Coach, then Send after typing a question | The answer as plain text with its source and response time |
+| Change alert limits | 2: Settings, then Save limits after setting Lighting to 0.2 | "Limits saved for this session."; back on the dashboard the banner lists the new alerts within 10 s |
+| Theme | 1: the theme button in the rail | System → Dark → Light |
+
 ## Mock data
 
 `subsystems/s2_web/services/mock_data.py` holds every figure. The Library values (reference date Tuesday 14 May 2024) are the capstone report figures. Lecture Hall A and Lab Building are demonstration datasets made up for the prototype and are labelled as such in the interface. All series are fixed lists or derived from them, so changing building or category never changes history. Only `/api/score` adds a random variation of at most ±0.5 points to the reference score. Times use Europe/Berlin.
@@ -226,21 +244,26 @@ Parameters: `building` (required), `category` (optional). Savings stay building-
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "date": "2024-05-14", "category": "heating",
  "kpis": {
    "energy": {"value": 7.5, "unit": "kWh", "display": "7.5", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
-   "co2": {"value": 2.9, "unit": "kg", "display": "2.9", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
+   "co2": {"value": 2.9, "unit": "kg", "display": "2.9", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week", "help": "Energy use × 0.38 kg CO₂ per kWh, …"},
    "cost": {"value": 2.62, "unit": "EUR", "display": "€2.62", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
-   "savings": {"value": 0.35, "unit": "EUR", "display": "€0.35", "co2_kg": 1.0, "co2_display": "1.0", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs normal use", "scope": "building"}}}
+   "savings": {"value": 0.35, "unit": "EUR", "display": "€0.35", "co2_kg": 1.0, "co2_display": "1.0", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs normal use", "negative": false, "scope": "building",
+               "week": {"eur": 2.35, "co2_kg": 2.5, "display": "€2.35", "co2_display": "2.5", "negative": false}}}}
 ```
+
+`savings.week` is this week against last week, from the week comparison. `negative` is `true` when more was used than the baseline; the page then shows the value in red. Every card also carries a `spark` trend line (left out above).
 
 Error (`GET /api/kpis`): `{"error": {"code": "missing_parameter", "message": "'building' is required."}}`
 
 ### GET /api/score
 
-Parameters: `building` (required). Simulated live reading with one decimal; `reference_score` is the whole-number report value.
+Parameters: `building` (required). Simulated live reading with one decimal; `reference_score` is the whole-number report value. `band` is the gauge colour (`red` below 60, `amber` 60–80, `green` above 80) and `needle_deg` the needle angle from −90 (0) to 90 (100). `help` holds the tooltip text.
 
 ```json
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "label": "Building score", "scope": "building",
  "score": 82.1, "display": "82.1", "reference_score": 82, "target": 90,
- "components": {"energy": {"value": 0.86, "display": "0.86", "weight": 0.4}, "carbon": {"value": 0.81, "display": "0.81", "weight": 0.35}, "comfort": {"value": 0.78, "display": "0.78", "weight": 0.25}},
+ "band": {"band": "green", "label": "Good", "needle_deg": 57.8}, "reference_band": {"band": "green", "label": "Good", "needle_deg": 57.6},
+ "help": "Weighted mix of energy, carbon and comfort, from 0 to 100. Red below 60, amber 60 to 80, green above 80.",
+ "components": {"energy": {"value": 0.86, "display": "0.86", "weight": 0.4, "help": "E, weight 0.40: …"}, "carbon": {"value": 0.81, "display": "0.81", "weight": 0.35, "help": "C, weight 0.35: …"}, "comfort": {"value": 0.78, "display": "0.78", "weight": 0.25, "help": "K, weight 0.25: …"}},
  "formula": "Score = 100 × (0.40·E + 0.35·C + 0.25·K)", "measured_at": "2026-10-21T00:12:18+02:00", "time_display": "00:12:18"}
 ```
 
@@ -262,7 +285,7 @@ Error (`?building=library&day=14.05.2024`): `{"error": {"code": "invalid_paramet
 
 ### GET /api/aggregates
 
-Parameters: `building` (required), `period` (default `week`). `daily_chart` is `null` for `today`.
+Parameters: `building` (required), `period` (default `week`). `daily_chart` is `null` for `today`; otherwise it is a stacked bar chart with one dataset per device type and the day `totals`.
 
 ```json
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "period": "week", "start": "2024-05-08", "end": "2024-05-14",
@@ -271,20 +294,23 @@ Parameters: `building` (required), `period` (default `week`). `daily_chart` is `
                 {"id": "servers", "label": "Servers", "kwh": 22.7, "share_pct": 22}, {"id": "other", "label": "Other", "kwh": 10.3, "share_pct": 10}],
  "chart": {"type": "bar", "labels": ["Heating", "Lighting", "Servers", "Other"], "categories": ["heating", "lighting", "servers", "other"],
            "datasets": [{"key": "share", "label": "Share of total", "data": [48, 20, 22, 10]}], "unit": "%", "…": "…"},
- "daily_chart": {"type": "bar", "labels": ["Wed 8 May", "…"], "datasets": [{"key": "primary", "label": "Energy use", "data": [15.9, "…"]}], "unit": "kWh", "…": "…"}}
+ "daily_chart": {"type": "bar", "stacked": true, "labels": ["Wed 8 May", "…"], "categories": ["heating", "lighting", "servers", "other"],
+                 "datasets": [{"key": "heating", "label": "Heating", "data": [7.63, "…"]}, "…"], "totals": [15.9, "…"], "unit": "kWh", "…": "…"}}
 ```
 
 Error (`?building=library&period=year`): `{"error": {"code": "invalid_parameter", "message": "'period' must be one of: today, week, 7d, 30d."}}`
 
 ### GET /api/alerts
 
-Parameters: `building` (required). Readings above the session's limits, latest first, at most 10.
+Parameters: `building` (required). Readings above the session's limits, latest first, at most 10. `banner` lists today's alerts for the dashboard (`null` when there are none); the dashboard requests it every 10 s and uses `key` to tell a new alert from one already dismissed.
 
 ```json
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "unit": "kWh",
  "limits_kwh": {"heating": 2.0, "lighting": 0.8, "servers": 3.5, "other": 1.0},
  "alerts": [{"time": "2024-05-14T13:00:00+02:00", "time_label": "Today 13:00", "category": "heating", "category_label": "Heating",
-             "value_kwh": 2.4, "limit_kwh": 2.0, "value_display": "2.4 kWh", "limit_display": "2.0 kWh", "message": "Heating above limit: 2.4 kWh"}]}
+             "value_kwh": 2.4, "limit_kwh": 2.0, "value_display": "2.4 kWh", "limit_display": "2.0 kWh", "message": "Heating above limit: 2.4 kWh"}],
+ "banner": {"key": "2024-05-14T13:00:00+02:00/heating", "title": "Heating is above the limit at 13:00.",
+            "text": "The heating load (2.4 kWh) exceeds the defined limit of 2.0 kWh.", "lines": []}}
 ```
 
 Error (`GET /api/alerts`): `{"error": {"code": "missing_parameter", "message": "'building' is required."}}`
