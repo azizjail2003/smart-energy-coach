@@ -117,7 +117,7 @@ classDiagram
 | Class | When it is used | Answer |
 | --- | --- | --- |
 | `InvalidInputError` | Unknown building, bad date, missing parameter, invalid coach question | 400 |
-| `ServiceUnavailableError` | S1 (analytics) or S3 (AI coach) does not answer | 503 |
+| `ServiceUnavailableError` | S1 (analytics) or S3 (AI coach) does not answer: `PageView.kpis` and `CoachView` turn a `ConnectionError` or `TimeoutError` into this error. On the dashboard a missing coach only hides the tip. | 503 |
 | `ErrorHandler` | Registered once in `create_app`; also handles 404, 405, an expired form token and unexpected crashes (500) | Error page, or JSON for `/api/` |
 
 The 15 tests for these cases are in `tests/s2/test_errors.py` and use Flask's test client:
