@@ -227,20 +227,30 @@ def day_label(day):
 
 
 def daily_chart(days):
-    labels = [day_label(day) for day, _ in days]
-    values = [total for _, total in days]
-    peak_day, peak = max(days, key=lambda item: item[1])
+    """Stacked bars of kWh per day, one segment per device type.
+
+    `days` is a list of (date, {category: kWh}) pairs, oldest first.
+    """
+    categories = [name for name in CATEGORIES if any(name in parts for _, parts in days)]
+    totals = [round(sum(parts.values()), 1) for _, parts in days]
+    peak_index = max(range(len(days)), key=lambda index: totals[index])
     return {
         "type": "bar",
-        "labels": labels,
-        "datasets": [{"key": "primary", "label": "Energy use", "data": values}],
+        "stacked": True,
+        "labels": [day_label(day) for day, _ in days],
+        "categories": categories,
+        "datasets": [
+            {"key": name, "label": CATEGORIES[name], "data": [round(parts.get(name, 0), 2) for _, parts in days]}
+            for name in categories
+        ],
+        "totals": totals,
         "unit": "kWh",
         "x_title": "Day",
         "y_title": "kWh",
         "limit": None,
         "above_limit": [],
-        "summary": f"Total {number(sum(values))} kWh over {len(days)} days. "
-        f"Highest: {number(peak)} kWh on {day_label(peak_day)}.",
+        "summary": f"Total {number(sum(totals))} kWh over {len(days)} days. "
+        f"Highest: {number(totals[peak_index])} kWh on {day_label(days[peak_index][0])}.",
     }
 
 

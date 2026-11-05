@@ -197,11 +197,14 @@ class PageView:
 
         daily_chart = None
         if len(days) > 1:
-            daily_totals = []
+            by_day = []
             for day in days:
-                readings = [kwh for _, kwh in analytics.get_hourly(building, day) if kwh is not None]
-                daily_totals.append((day, round(sum(readings), 1)))
-            daily_chart = presenter.to_daily_chart(daily_totals)
+                parts = {}
+                for category in CATEGORIES:
+                    readings = [kwh for _, kwh in analytics.get_hourly(building, day, category) if kwh is not None]
+                    parts[category] = sum(readings)
+                by_day.append((day, parts))
+            daily_chart = presenter.to_daily_chart(by_day)
 
         return {
             "building": info,

@@ -90,7 +90,17 @@ def test_aggregates_week(client):
         ("heating", 48), ("lighting", 20), ("servers", 22), ("other", 10),
     ]
     assert data["chart"]["datasets"][0]["data"] == [48, 20, 22, 10]
-    assert sum(data["daily_chart"]["datasets"][0]["data"]) == pytest.approx(103.3)
+    daily = data["daily_chart"]
+    assert daily["stacked"] is True
+    assert [s["key"] for s in daily["datasets"]] == ["heating", "lighting", "servers", "other"]
+    assert sum(daily["totals"]) == pytest.approx(103.3)
+    # Each day's segments add up to that day's total.
+    for index, total in enumerate(daily["totals"]):
+        assert sum(s["data"][index] for s in daily["datasets"]) == pytest.approx(total, abs=0.06)
+    # Each device type over the week matches the S1 weekly aggregate, up to rounding.
+    weekly = {row["id"]: row["kwh"] for row in data["categories"]}
+    for series in daily["datasets"]:
+        assert sum(series["data"]) == pytest.approx(weekly[series["key"]], abs=0.15)
 
 
 def test_aggregates_periods(client):

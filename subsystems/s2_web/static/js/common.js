@@ -114,6 +114,17 @@ window.SEM = (function () {
   }
 
   function barDatasets(chart, highlight) {
+    if (chart.stacked) {
+      // One segment per device type, stacked into a bar per day.
+      return chart.datasets.map((set) => ({
+        label: set.label,
+        data: set.data,
+        backgroundColor: token(CATEGORY_COLORS[set.key]),
+        borderColor: token("--card"),
+        borderWidth: { top: 1 },
+        maxBarThickness: 56,
+      }));
+    }
     let colors = token("--brand");
     if (chart.categories) {
       colors = chart.categories.map((id) => {
@@ -131,16 +142,21 @@ window.SEM = (function () {
   }
 
   // Draws the value above each bar, like the percentages in the approved design.
+  // On stacked bars the label is the day's total, drawn above the top segment.
   const barValueLabels = {
     id: "barValueLabels",
     afterDatasetsDraw(instance, args, options) {
       const { ctx } = instance;
-      const values = instance.data.datasets[0].data;
+      const top = instance.data.datasets.length - 1;
+      const values = options.totals || instance.data.datasets[0].data;
       ctx.save();
       ctx.font = `600 12px ${token("--font")}`;
       ctx.fillStyle = token("--text");
       ctx.textAlign = "center";
-      instance.getDatasetMeta(0).data.forEach((bar, index) => {
+      instance.getDatasetMeta(options.totals ? top : 0).data.forEach((bar, index) => {
+        if (options.totals && values.length > 10) {
+          return;  // too many days to label every bar; the tooltip shows each total
+        }
         ctx.fillText(options.format(values[index]), bar.x, bar.y - 6);
       });
       ctx.restore();
@@ -164,10 +180,13 @@ window.SEM = (function () {
         layout: { padding: { top: isLine ? 4 : 20 } },
         plugins: {
           legend: {
-            display: isLine,
+            display: isLine || Boolean(chart.stacked),
             position: "bottom",
             align: "start",
-            labels: { usePointStyle: true, pointStyle: "line", boxWidth: 28, color: token("--text"), padding: 16 },
+            labels: {
+              usePointStyle: true, pointStyle: chart.stacked ? "rectRounded" : "line",
+              boxWidth: chart.stacked ? 12 : 28, color: token("--text"), padding: 16,
+            },
           },
           tooltip: {
             callbacks: {
@@ -178,17 +197,25 @@ window.SEM = (function () {
                 }
                 return text;
               },
+              footer(items) {
+                return chart.stacked && items.length ? `Total: ${formatValue(chart.totals[items[0].dataIndex], chart.unit)}` : "";
+              },
             },
           },
-          barValueLabels: { format: (value) => (chart.unit === "%" ? `${value}%` : value.toFixed(1)) },
+          barValueLabels: {
+            totals: chart.stacked ? chart.totals : null,
+            format: (value) => (chart.unit === "%" ? `${value}%` : value.toFixed(1)),
+          },
         },
         scales: {
           x: {
+            stacked: Boolean(chart.stacked),
             title: { display: true, text: chart.x_title, color: muted },
             grid: { color: grid, drawTicks: false },
             ticks: { color: muted, maxRotation: 0, autoSkip: true, maxTicksLimit: isLine ? (narrow ? 5 : 9) : 16, padding: 6 },
           },
           y: {
+            stacked: Boolean(chart.stacked),
             beginAtZero: true,
             title: { display: true, text: chart.y_title, color: muted },
             grid: { color: grid, drawTicks: false },

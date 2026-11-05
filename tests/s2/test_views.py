@@ -57,8 +57,14 @@ def test_chart_presenter_builds_the_three_chart_types():
     assert line["above_limit"] == [2]
     bar = presenter.to_bar_chart({"heating": 6.0, "lighting": 2.0, "servers": 1.0, "other": 1.0})
     assert bar["type"] == "bar" and bar["datasets"][0]["data"] == [60, 20, 10, 10]
-    daily = presenter.to_daily_chart([(datetime(2024, 5, 13).date(), 10.0), (datetime(2024, 5, 14).date(), 12.0)])
-    assert daily["type"] == "bar" and "Highest: 12.0 kWh" in daily["summary"]
+    daily = presenter.to_daily_chart([
+        (datetime(2024, 5, 13).date(), {"heating": 6.0, "lighting": 4.0}),
+        (datetime(2024, 5, 14).date(), {"heating": 7.0, "lighting": 5.0}),
+    ])
+    assert daily["type"] == "bar" and daily["stacked"] is True
+    assert [(s["key"], s["data"]) for s in daily["datasets"]] == [("heating", [6.0, 7.0]), ("lighting", [4.0, 5.0])]
+    assert daily["totals"] == [10.0, 12.0]
+    assert "Highest: 12.0 kWh" in daily["summary"]
 
 
 # -- Forms ---------------------------------------------------------------------------
