@@ -80,6 +80,52 @@ classDiagram
 | `ThresholdForm` | `subsystems/s2_web/forms.py` | One alert limit per device type (0.1 to 20 kWh/h). |
 | `CoachView` | `subsystems/s2_web/views/coach_view.py` | AI Coach page, chat answers and the dashboard tip, on top of the S3 coach. |
 
+#### S2 – Error handling (Homework Assignment 4)
+
+Every error that S2 raises on purpose inherits from `S2Error`. The `ErrorHandler` class catches these, and any unexpected crash, and answers with a friendly page or a JSON message with the right status code. Users never see a stack trace. Code: `subsystems/s2_web/errors.py`.
+
+```mermaid
+classDiagram
+    direction LR
+    class S2Error {
+        +status = 500
+        +code = "server_error"
+        +message
+    }
+    class InvalidInputError {
+        +status = 400
+        +code = "invalid_parameter"
+    }
+    class ServiceUnavailableError {
+        +status = 503
+        +code = "service_unavailable"
+    }
+    class ErrorHandler {
+        +init_app(app)
+        +respond(status, code, message)
+        +handle_s2_error(error)
+        +handle_csrf_error(error)
+        +handle_http_error(error)
+        +handle_unexpected_error(error)
+    }
+    Exception <|-- S2Error
+    S2Error <|-- InvalidInputError
+    S2Error <|-- ServiceUnavailableError
+    ErrorHandler ..> S2Error : catches
+```
+
+| Class | When it is used | Answer |
+| --- | --- | --- |
+| `InvalidInputError` | Unknown building, bad date, missing parameter, invalid coach question | 400 |
+| `ServiceUnavailableError` | S1 (analytics) or S3 (AI coach) does not answer | 503 |
+| `ErrorHandler` | Registered once in `create_app`; also handles 404, 405, an expired form token and unexpected crashes (500) | Error page, or JSON for `/api/` |
+
+The 15 tests for these cases are in `tests/s2/test_errors.py` and use Flask's test client:
+
+```bash
+pytest tests/s2/test_errors.py -v
+```
+
 ### S1 – Monitoring, Simulation & Analytics Engine
 
 Added by the S1 owner.
@@ -143,6 +189,7 @@ subsystems/
   s2_web/
     __init__.py        app factory, configuration, error handlers
     catalog.py         accepted buildings, device types, tones and periods
+    errors.py          S2Error, InvalidInputError, ServiceUnavailableError and the ErrorHandler
     forms.py           ScenarioForm and ThresholdForm (Flask-WTF)
     presenter.py       ChartPresenter and the formatting helpers behind it
     services/
@@ -220,13 +267,13 @@ All responses are JSON. Times are ISO 8601 with offset (Europe/Berlin), dates ar
 
 Accepted values: `building` = `library`, `lecture-hall-a`, `lab-building`; `category` = `heating`, `lighting`, `servers`, `other` (omit for all); `period` = `today`, `week`, `7d`, `30d` (`week` and `7d` both mean the 7 days ending on the report date); `tone` = `encouraging`, `analytical`, `strict`.
 
-Errors use HTTP 400 (404 for unknown routes, 405 for a wrong method) and this shape:
+Errors use HTTP 400 (404 for unknown routes, 405 for a wrong method, 503 when S1 or S3 does not answer) and this shape:
 
 ```json
 {"error": {"code": "invalid_parameter", "message": "'building' must be one of: library, lecture-hall-a, lab-building."}}
 ```
 
-Error codes: `missing_parameter`, `invalid_parameter`, `invalid_request`, `csrf_failed`, `not_found`, `method_not_allowed`, `server_error`.
+Error codes: `missing_parameter`, `invalid_parameter`, `invalid_request`, `csrf_failed`, `not_found`, `method_not_allowed`, `service_unavailable`, `server_error`.
 
 Charts share one structure, built in `presenter.py` and drawn by `static/js/common.js`:
 
