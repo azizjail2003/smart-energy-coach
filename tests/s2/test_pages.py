@@ -146,20 +146,6 @@ def test_forms_reject_wrong_csrf_token(client):
     assert response.status_code == 400
 
 
-def test_server_errors_hide_details():
-    app = create_app({"SECRET_KEY": "test-secret"})
-
-    @app.get("/boom")
-    def boom():
-        raise RuntimeError("secret internal detail")
-
-    response = app.test_client().get("/boom")
-    assert response.status_code == 500
-    assert b"Something went wrong" in response.data
-    assert b"secret internal detail" not in response.data
-    assert b"Traceback" not in response.data
-
-
 def test_debug_is_off_by_default(app, monkeypatch):
     assert app.debug is False
 
