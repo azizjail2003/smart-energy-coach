@@ -188,9 +188,9 @@ class AlertMonitor:
         if isinstance(building_id, dict):
             limits, building_id = building_id, config.DEFAULT_BUILDING_ID
         effective = {**self.get_limits_for_building(building_id), **(limits or {})}
-        rows = readings if readings is not None else self.repository.fetch_readings(building_id, 16)
+        rows = readings if readings is not None else self.repository.fetch_readings(building_id)
         alerts = []
-        for row in rows[:16]:
+        for row in rows:
             data = row.to_dict() if isinstance(row, EnergyReading) else row
             data["timestamp"] = _parse_datetime(data["timestamp"])
             device = data["device_type"]
