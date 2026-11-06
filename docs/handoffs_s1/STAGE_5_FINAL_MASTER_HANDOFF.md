@@ -31,11 +31,11 @@ The following matrix covers every Subsystem 1 requirement from **FR1-FR10** and
 | FR3: Calculate CO2 and cost | `ScoreCalculator.calc_co2()` and `calc_cost()` | `test_co2_and_cost_calculation` |
 | FR4: Calculate comfort index | `ScoreCalculator.calc_comfort()` | `test_comfort_score_at_ideal_temp` |
 | FR5: Calculate sustainability score | `ScoreCalculator.calc_sustainability_score()` | `test_comfort_score_at_ideal_temp` |
-| FR6: Produce dashboard KPIs | `AnalyticsService.get_dashboard_summary()` | `test_seed_and_summary_with_temp_db` |
-| FR7: Detect threshold alerts and aggregations | `AlertMonitor.check_alerts()`; `get_aggregates()`; `compute_week_over_week()` | `test_live_step_and_alert_fallback_safety`; `test_week_over_week_and_time_aggregations` |
+| FR6: Produce dashboard KPIs | `AnalyticsService.get_dashboard_summary()`; `get_score()` | `test_seed_and_summary_with_temp_db`; `test_score_alerts_and_scenario_api` |
+| FR7: Detect threshold alerts and aggregations | `AlertMonitor.check_alerts()`; `get_alerts()`; `get_aggregates()`; `compute_week_over_week()` | `test_live_step_and_alert_fallback_safety`; `test_week_over_week_and_time_aggregations`; `test_alert_monitor_loads_building_limits`; `test_score_alerts_and_scenario_api` |
 | FR8: Calculate savings and dashboard metrics | `AnalyticsService.get_dashboard_summary()` using `BASELINE_DAILY_KWH` | `test_seed_and_summary_with_temp_db` |
-| FR9: Project what-if scenarios | `AnalyticsService.simulate_scenario()` | `test_scenario_reduces_energy_when_heating_lowered`; `test_uml_method_signature_compatibility` |
-| FR10: Validate and persist readings | `EnergyReading.validate()`; `AnalyticsService.save_reading()` and seeding | `test_reading_validation_rejects_negative_kwh`; `test_live_step_and_alert_fallback_safety` |
+| FR9: Project what-if scenarios | `AnalyticsService.simulate_scenario()`; `estimate_scenario()` | `test_scenario_reduces_energy_when_heating_lowered`; `test_uml_method_signature_compatibility`; `test_score_alerts_and_scenario_api` |
+| FR10: Validate and persist readings | `EnergyReading.validate()`; `AnalyticsService.save_reading()` and seeding | `test_reading_validation_rejects_negative_kwh`; `test_building_isolation`; `test_live_step_and_alert_fallback_safety` |
 
 ### Non-Functional Requirements
 
@@ -43,14 +43,14 @@ The following matrix covers every Subsystem 1 requirement from **FR1-FR10** and
 | --- | --- | --- |
 | NFR1: Fast calculation | Pure `ScoreCalculator` methods and in-memory simulator calculations | `test_single_calculation_performance_under_50ms` |
 | NFR2: Deterministic mathematical engine | `ScoreCalculator` uses only inputs and configured constants | `test_co2_and_cost_calculation`; `test_comfort_score_at_ideal_temp` |
-| NFR3: Modular architecture | Five UML classes plus repository adapter with facade boundaries | Expanded pytest suite imports and exercises classes independently |
+| NFR3: Modular architecture | Five UML classes plus repository adapter with facade boundaries | `test_score_alerts_and_scenario_api`; `test_building_isolation`; `test_alert_monitor_loads_building_limits` |
 | NFR4: Data integrity and deterministic simulation | `EnergyReading.validate()` plus isolated `random.Random(42)` | `test_reading_validation_rejects_negative_kwh`; `test_fixed_seed_determinism` |
 | NFR5: Configurability | `ScoreCalculator` loads factors from `config.py`; service loads DB, limits, and baseline constants | `test_co2_and_cost_calculation`; `test_seed_and_summary_with_temp_db` |
-| NFR6: Standard data interchange | `EnergyReading.to_dict()` and service dictionary contracts | `test_live_step_and_alert_fallback_safety`; summary contract assertions |
+| NFR6: Standard data interchange | `EnergyReading.to_dict()` and service dictionary contracts | `test_live_step_and_alert_fallback_safety`; `test_returned_timestamps_are_datetime_objects` |
 | NFR7: Repository persistence | S3 MySQL repository interface with local offline fallback and batch `executemany` | `test_seed_and_summary_with_temp_db` asserts 1,344 rows under 10 seconds |
 | NFR8: Type-hinted, readable Python API | Type hints and clear class/method contracts throughout `s1_analytics.py` | All tests execute the public API; diagnostics and compilation pass |
 | NFR9: Human-readable documentation | Docstrings, comments, staged handoffs, and this guide | Review artifact: Stage 1–5 handoff documents |
-| NFR10: Safe fallback behavior | Default limits, empty dashboard response, missing scenario values, and default threshold `2.0` | `test_live_step_and_alert_fallback_safety`; `test_uml_method_signature_compatibility` |
+| NFR10: Safe fallback behavior | Default limits, empty dashboard response, missing scenario values, and default threshold `2.0` | `test_live_step_and_alert_fallback_safety`; `test_uml_method_signature_compatibility`; `test_score_alerts_and_scenario_api` |
 
 ## Integration Guide: Subsystem 2 Web UI
 
@@ -115,7 +115,7 @@ The S1-owned MySQL repository schema is:
 
 ```sql
 CREATE TABLE IF NOT EXISTS energy_readings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
     timestamp DATETIME NOT NULL,
     building_id VARCHAR(50) NOT NULL,
     device_type ENUM('Heating','Lighting','Servers','Other') NOT NULL,
@@ -124,6 +124,13 @@ CREATE TABLE IF NOT EXISTS energy_readings (
     co2_kg DECIMAL(6,2) NOT NULL,
     sustainability_score INT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS alert_thresholds (
+    building_id VARCHAR(50) NOT NULL,
+    device_type VARCHAR(50) NOT NULL,
+    limit_kwh DECIMAL(6,2) NOT NULL,
+    PRIMARY KEY (building_id, device_type)
+);
 ```
 
 Column meanings:
@@ -131,8 +138,8 @@ Column meanings:
 | Column | Type | Contract |
 | --- | --- | --- |
 | `id` | `INTEGER` | Database-generated primary key |
-| `timestamp` | `DATETIME` | `%Y-%m-%d %H:%M` |
-| `building_id` | `VARCHAR(50)` | `library` or `central_office` |
+| `timestamp` | `DATETIME` | Python `datetime` in service dictionaries; serialized as `%Y-%m-%d %H:%M` at the repository boundary |
+| `building_id` | `VARCHAR(50)` | `library`, `lecture-hall-a`, or `lab-building` |
 | `device_type` | `ENUM` | `Heating`, `Lighting`, `Servers`, or `Other` |
 | `kwh` | `DECIMAL(6,2)` | Non-negative energy consumption |
 | `room_temp` | `DECIMAL(4,1)` | Validated range `0` to `45` C |
@@ -160,11 +167,17 @@ The dashboard summary dictionary has these exact keys:
     "vs_last_week_pct": float,
     "this_week_by_device": dict,
     "hourly_series": list,
+    "last_week_hourly_series": list,
     "daily_totals": dict,
     "weekly_totals": dict,
+    "by_device_week": dict,
+    "period": str,
+    "category": str | None,
     "week_over_week": dict,
 }
 ```
+
+`recent_rows`, alert dictionaries, and `hourly_series`/`last_week_hourly_series` entries all expose `timestamp` as Python `datetime` objects. The facade also provides `get_score()`, `get_aggregates(period, category, building_id)`, `get_alerts()`, and `estimate_scenario(changes)` for focused UI and API integrations.
 
 For the AI coach, the primary required inputs are `summary.get("energy_today")`, `summary.get("co2_today")`, and `summary.get("score")`. The remaining values are available for richer coaching explanations.
 
@@ -207,7 +220,7 @@ Run `pytest -q`. Say: “The test suite covers the mandatory formulas, validatio
 ### Fifteen-to-twenty-minute defense
 
 1. **Architecture, 2 minutes:** Draw the chain `EnergyReading -> ScoreCalculator -> EnergySimulator -> AlertMonitor -> AnalyticsService`. Explain the single-responsibility boundary of each class and the repository adapter boundary.
-2. **Data integrity, 3 minutes:** Demonstrate the three `ValueError` guards and explain why invalid values must be rejected before persistence.
+2. **Data integrity, 3 minutes:** Demonstrate the four `ValueError` guards and explain why invalid values must be rejected before persistence.
 3. **Math, 4 minutes:** Whiteboard the CO2, cost, comfort, and weighted sustainability formulas. Use `10 kWh -> 3.8 kg CO2 and 3.5 EUR`, then use `2 kWh/hour at 21 C` for a score example.
 4. **Simulation, 2 minutes:** Explain base loads, occupancy multiplier, noise bounds, fixed seed, and the 1,344-row fourteen-day dataset.
 5. **Database facade, 3 minutes:** Show the MySQL schema, repository interface, parameterized batch insert, and building filters. Explain why on-demand generation avoids background-thread and database locking issues.

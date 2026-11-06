@@ -23,7 +23,7 @@ DEFAULT_LIMITS = {
 BASELINE_DAILY_KWH = 18.0
 
 DEFAULT_BUILDING_ID = "library"
-BUILDINGS = ["library", "central_office"]
+BUILDINGS = ["library", "lecture-hall-a", "lab-building"]
 RANDOM_SEED = 42
 
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")

@@ -17,11 +17,21 @@ except ModuleNotFoundError as error:
     import config
 
 
+def _parse_datetime(value: datetime | str) -> datetime:
+    """Parse minute-format or standard DATETIME timestamp values."""
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return datetime.fromisoformat(str(value))
+
+
 @dataclass
 class EnergyReading:
     """Validated energy measurement shared by analytics and web templates."""
 
-    timestamp: str
+    timestamp: datetime
     device_type: str
     kwh: float
     room_temp: float
@@ -29,11 +39,17 @@ class EnergyReading:
     sustainability_score: int
     building_id: str = config.DEFAULT_BUILDING_ID
 
+    def __post_init__(self) -> None:
+        if isinstance(self.timestamp, str):
+            self.timestamp = _parse_datetime(self.timestamp)
+
     @property
     def score(self) -> int:
         return self.sustainability_score
 
     def validate(self) -> bool:
+        if not isinstance(self.timestamp, datetime):
+            raise ValueError("Timestamp must be a valid datetime.")
         if self.kwh < 0:
             raise ValueError("Energy reading (kWh) cannot be negative.")
         if not (0.0 <= self.room_temp <= 45.0):
@@ -89,18 +105,21 @@ class EnergySimulator:
         self.seed = seed
         self._rng = random.Random(seed)
 
-    def generate_reading(self, device: str, ts: datetime | int | None = None, building_id: str = config.DEFAULT_BUILDING_ID) -> EnergyReading:
+    def generate_reading(self, device: str, ts: datetime | int | str | None = None, building_id: str = config.DEFAULT_BUILDING_ID) -> EnergyReading:
         if ts is None:
             dt = datetime.now()
         elif isinstance(ts, int):
             dt = datetime.now().replace(hour=ts % 24, minute=0, second=0, microsecond=0)
+        elif isinstance(ts, str):
+            dt = _parse_datetime(ts)
         else:
             dt = ts
         daytime_multiplier = 1.4 if 8 <= dt.hour <= 18 else 0.6
         base = self.base_loads.get(device, 0.5)
         kwh = round(base * daytime_multiplier * self._rng.uniform(0.85, 1.25), 2)
         temp = round(21.0 + self._rng.uniform(-1.5, 2.0), 1)
-        reading = EnergyReading(dt.strftime("%Y-%m-%d %H:%M"), device, kwh, temp, self.calculator.calc_co2(kwh), self.calculator.calc_sustainability_score(kwh, temp)["score"], building_id)
+        dt = dt.replace(second=0, microsecond=0)
+        reading = EnergyReading(dt, device, kwh, temp, self.calculator.calc_co2(kwh), self.calculator.calc_sustainability_score(kwh, temp)["score"], building_id)
         reading.validate()
         return reading
 
@@ -127,7 +146,7 @@ class SQLiteRepository:
 
     def insert_readings(self, readings: list[EnergyReading]) -> None:
         with sqlite3.connect(self.db_path) as conn:
-            conn.executemany("INSERT INTO energy_readings (timestamp, building_id, device_type, kwh, room_temp, co2_kg, sustainability_score) VALUES (?, ?, ?, ?, ?, ?, ?)", [(r.timestamp, r.building_id, r.device_type, r.kwh, r.room_temp, r.co2_kg, r.sustainability_score) for r in readings])
+            conn.executemany("INSERT INTO energy_readings (timestamp, building_id, device_type, kwh, room_temp, co2_kg, sustainability_score) VALUES (?, ?, ?, ?, ?, ?, ?)", [(r.timestamp.strftime("%Y-%m-%d %H:%M"), r.building_id, r.device_type, r.kwh, r.room_temp, r.co2_kg, r.sustainability_score) for r in readings])
 
     def fetch_readings(self, building_id: str, limit: int | None = None) -> list[dict]:
         query = "SELECT * FROM energy_readings WHERE building_id = ? ORDER BY timestamp DESC, id DESC"
@@ -137,7 +156,10 @@ class SQLiteRepository:
             params += (limit,)
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            return [dict(row) for row in conn.execute(query, params).fetchall()]
+            rows = [dict(row) for row in conn.execute(query, params).fetchall()]
+        for row in rows:
+            row["timestamp"] = _parse_datetime(row["timestamp"])
+        return rows
 
     def get_limits_for_building(self, building_id: str) -> dict[str, float]:
         with sqlite3.connect(self.db_path) as conn:
@@ -163,11 +185,14 @@ class AlertMonitor:
         return merged
 
     def check_alerts(self, building_id: str = config.DEFAULT_BUILDING_ID, readings: list[dict | EnergyReading] | None = None, limits: dict[str, float] | None = None) -> list[dict]:
+        if isinstance(building_id, dict):
+            limits, building_id = building_id, config.DEFAULT_BUILDING_ID
         effective = {**self.get_limits_for_building(building_id), **(limits or {})}
         rows = readings if readings is not None else self.repository.fetch_readings(building_id, 16)
         alerts = []
         for row in rows[:16]:
             data = row.to_dict() if isinstance(row, EnergyReading) else row
+            data["timestamp"] = _parse_datetime(data["timestamp"])
             device = data["device_type"]
             limit = float(effective.get(device, 2.0))
             if data["kwh"] > limit:
@@ -208,11 +233,13 @@ class AnalyticsService:
         return results
 
     def check_alerts(self, building_id: str = config.DEFAULT_BUILDING_ID, limits: dict | None = None, recent_rows: list | None = None) -> list[dict]:
+        if isinstance(building_id, dict):
+            limits, building_id = building_id, config.DEFAULT_BUILDING_ID
         return self.alert_monitor.check_alerts(building_id, recent_rows, limits)
 
     @staticmethod
     def _dt(row: dict) -> datetime:
-        return datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M")
+        return _parse_datetime(row["timestamp"])
 
     def _window(self, rows: list[dict], start: datetime, end: datetime) -> list[dict]:
         return [row for row in rows if start <= self._dt(row) < end]
@@ -221,26 +248,47 @@ class AnalyticsService:
         energy = round(sum(row["kwh"] for row in rows), 2)
         return {"energy_kwh": energy, "co2_kg": self.calculator.calc_co2(energy), "cost_eur": self.calculator.calc_cost(energy)}
 
-    def get_aggregates(self, building_id: str = config.DEFAULT_BUILDING_ID) -> dict:
+    def get_aggregates(self, period: str = "week", category: str | None = None, building_id: str = config.DEFAULT_BUILDING_ID) -> dict:
+        if period in config.BUILDINGS and category is None:
+            building_id, period = period, "week"
+        period = (period or "week").lower()
+        hours_by_period = {"day": 24, "week": 168, "month": 720}
+        window_hours = hours_by_period.get(period, 168)
         rows = self.repository.fetch_readings(building_id)
+        selected_category = None
+        if category and category.lower() != "all":
+            selected_category = next(
+                (device for device in config.DEVICES if device.lower() == category.lower()),
+                category,
+            )
         if not rows:
-            return {"hourly_series": [], "last_week_hourly_series": [], "daily_totals": {}, "weekly_totals": {}, "by_device_week": {}}
+            return {
+                "hourly_series": [],
+                "last_week_hourly_series": [],
+                "daily_totals": {},
+                "weekly_totals": {},
+                "by_device_week": {},
+                "period": period,
+                "category": selected_category,
+            }
         latest = max(self._dt(row) for row in rows)
+        if selected_category is not None:
+            rows = [row for row in rows if row["device_type"] == selected_category]
         def series(source: list[dict]) -> list[dict]:
             grouped = {}
             for row in source:
-                stamp = self._dt(row).strftime("%Y-%m-%d %H:00")
+                stamp = self._dt(row).replace(minute=0, second=0, microsecond=0)
                 item = grouped.setdefault(stamp, {"timestamp": stamp, "kwh": 0.0, "by_device": {device: 0.0 for device in config.DEVICES}})
                 item["kwh"] += row["kwh"]
                 item["by_device"][row["device_type"]] += row["kwh"]
             return [{**item, "kwh": round(item["kwh"], 2), "by_device": {key: round(value, 2) for key, value in item["by_device"].items()}} for item in sorted(grouped.values(), key=lambda item: item["timestamp"])]
-        hourly = self._window(rows, latest - timedelta(hours=23), latest + timedelta(hours=1))
-        last_hourly = self._window(rows, latest - timedelta(days=7, hours=23), latest - timedelta(days=7) + timedelta(hours=1))
+        hourly = self._window(rows, latest - timedelta(hours=min(window_hours - 1, 23)), latest + timedelta(hours=1))
+        last_hourly = self._window(rows, latest - timedelta(days=7, hours=min(window_hours - 1, 23)), latest - timedelta(days=7) + timedelta(hours=1))
         today = self._totals(hourly)
         previous = self._totals(last_hourly)
         versus = round(((today["energy_kwh"] - previous["energy_kwh"]) / previous["energy_kwh"]) * 100, 1) if previous["energy_kwh"] else 0.0
-        week = self._window(rows, latest - timedelta(hours=167), latest + timedelta(hours=1))
-        return {"hourly_series": series(hourly), "last_week_hourly_series": series(last_hourly), "daily_totals": {"today": today, "last_week": previous, "vs_last_week_pct": versus}, "weekly_totals": self._totals(week), "by_device_week": {device: round(sum(row["kwh"] for row in week if row["device_type"] == device), 2) for device in config.DEVICES}}
+        week = self._window(rows, latest - timedelta(hours=window_hours - 1), latest + timedelta(hours=1))
+        return {"hourly_series": series(hourly), "last_week_hourly_series": series(last_hourly), "daily_totals": {"today": today, "last_week": previous, "vs_last_week_pct": versus}, "weekly_totals": self._totals(week), "by_device_week": {device: round(sum(row["kwh"] for row in week if row["device_type"] == device), 2) for device in config.DEVICES}, "period": period, "category": selected_category or category}
 
     def compute_week_over_week(self, building_id: str = config.DEFAULT_BUILDING_ID) -> dict:
         rows = self.repository.fetch_readings(building_id)
@@ -256,10 +304,12 @@ class AnalyticsService:
         if isinstance(building_id, dict):
             limits, building_id = building_id, config.DEFAULT_BUILDING_ID
         rows = self.repository.fetch_readings(building_id, 32)
-        aggregates = self.get_aggregates(building_id)
+        for row in rows:
+            row["timestamp"] = _parse_datetime(row["timestamp"])
+        aggregates = self.get_aggregates(building_id=building_id)
         week_over_week = self.compute_week_over_week(building_id)
         if not rows:
-            return {"building_id": building_id, "energy_today": 0, "co2_today": 0, "cost_today": 0, "savings_eur": 0, "savings_co2": 0, "score": 80, "E": 0.8, "C": 0.8, "K": 0.8, "room_temp": 21.0, "by_device": {}, "alerts": [], "recent_rows": [], "vs_last_week_pct": 0.0, "this_week_by_device": {}, **aggregates, "week_over_week": week_over_week}
+            return {"building_id": building_id, "energy_today": 0.0, "co2_today": 0.0, "cost_today": 0.0, "savings_eur": 0.0, "savings_co2": 0.0, "score": 80, "E": 0.8, "C": 0.8, "K": 0.8, "room_temp": 21.0, "by_device": {}, "alerts": [], "recent_rows": [], "vs_last_week_pct": 0.0, "this_week_by_device": {}, **aggregates, "week_over_week": week_over_week}
         latest = rows[:16]
         by_device = {device: round(sum(row["kwh"] for row in latest if row["device_type"] == device), 2) for device in config.DEVICES}
         energy = round(sum(by_device.values()), 2)
@@ -268,14 +318,76 @@ class AnalyticsService:
         saved = max(0.0, config.BASELINE_DAILY_KWH - energy)
         return {"building_id": building_id, "energy_today": energy, "co2_today": self.calculator.calc_co2(energy), "cost_today": self.calculator.calc_cost(energy), "savings_eur": self.calculator.calc_cost(saved), "savings_co2": self.calculator.calc_co2(saved), "score": parts["score"], "E": parts["E"], "C": parts["C"], "K": parts["K"], "room_temp": avg_temp, "by_device": by_device, "alerts": self.check_alerts(building_id, limits, latest), "recent_rows": rows, "vs_last_week_pct": aggregates["daily_totals"].get("vs_last_week_pct", 0.0), "this_week_by_device": aggregates["by_device_week"], **aggregates, "week_over_week": week_over_week}
 
-    def simulate_scenario(self, current_summary: dict | float | str = config.DEFAULT_BUILDING_ID, heating_delta_c: float = 0.0, light_reduction_pct: float | None = None, building_id: str = config.DEFAULT_BUILDING_ID) -> dict:
-        if isinstance(current_summary, (int, float)) and light_reduction_pct is None:
-            light_reduction_pct, heating_delta_c, current_summary = heating_delta_c, current_summary, self.get_dashboard_summary(building_id)
-        elif isinstance(current_summary, str):
-            building_id, current_summary = current_summary, self.get_dashboard_summary(current_summary)
-        assert isinstance(current_summary, dict)
-        before = current_summary.get("energy_today") or 15.7
-        devices = current_summary.get("by_device") or {}
-        after = round(max(1.0, before + devices.get("Heating", 7.0) * heating_delta_c * 0.06 - devices.get("Lighting", 3.0) * ((light_reduction_pct or 0.0) / 100.0)), 2)
-        score = self.calculator.calc_sustainability_score(after / 8.0, current_summary.get("room_temp", 21.0) + heating_delta_c)["score"]
-        return {"before_kwh": before, "after_kwh": after, "before_co2": self.calculator.calc_co2(before), "after_co2": self.calculator.calc_co2(after), "before_cost": self.calculator.calc_cost(before), "after_cost": self.calculator.calc_cost(after), "before_score": current_summary.get("score", 80), "after_score": score}
+    def get_score(self, building_id: str = config.DEFAULT_BUILDING_ID) -> dict:
+        rows = self.repository.fetch_readings(building_id, 16)
+        if not rows:
+            return {"score": 80, "E": 0.8, "C": 0.8, "K": 0.8, "room_temp": 21.0, "building_id": building_id}
+        energy = round(sum(row["kwh"] for row in rows), 2)
+        room_temp = round(sum(row["room_temp"] for row in rows[:4]) / len(rows[:4]), 1)
+        score = self.calculator.calc_sustainability_score(energy / 8.0, room_temp)
+        return {**score, "room_temp": room_temp, "building_id": building_id}
+
+    def get_alerts(self, building_id: str = config.DEFAULT_BUILDING_ID, limits: dict | None = None, recent_rows: list | None = None) -> list[dict]:
+        return self.check_alerts(building_id=building_id, limits=limits, recent_rows=recent_rows)
+
+    def estimate_scenario(self, changes: dict, building_id: str = config.DEFAULT_BUILDING_ID) -> dict:
+        scenario_building = changes.get("building_id", building_id)
+        summary = changes.get("summary")
+        if summary is None:
+            summary = self.get_dashboard_summary(building_id=scenario_building)
+        heating_delta = changes.get("heating_delta_c")
+        if heating_delta is None:
+            heating_delta = changes.get("heating_delta", 0.0)
+        light_reduction = changes.get("light_reduction_pct")
+        if light_reduction is None:
+            light_reduction = changes.get("lighting_reduction", 0.0)
+        return self.simulate_scenario(summary, heating_delta, light_reduction, scenario_building)
+
+    def simulate_scenario(
+            self,
+            current_summary: dict | float | str | None = None,
+            heating_delta_c: float = 0.0,
+            light_reduction_pct: float | str | None = None,
+            building_id: str = config.DEFAULT_BUILDING_ID,
+        ) -> dict:
+            if isinstance(current_summary, (int, float)):
+                if isinstance(light_reduction_pct, str):
+                    building_id = light_reduction_pct
+                    light_reduction_pct = heating_delta_c
+                elif light_reduction_pct is None:
+                    light_reduction_pct = heating_delta_c
+                heating_delta_c = float(current_summary)
+                current_summary = self.get_dashboard_summary(building_id)
+            elif isinstance(current_summary, str):
+                building_id = current_summary
+                current_summary = self.get_dashboard_summary(building_id)
+            elif current_summary is None:
+                current_summary = self.get_dashboard_summary(building_id)
+            if not isinstance(current_summary, dict):
+                raise TypeError("current_summary must be a dashboard summary dict, numeric delta, or building_id str.")
+
+            light_pct = float(light_reduction_pct or 0.0)
+            before = current_summary.get("energy_today") or 15.7
+            devices = current_summary.get("by_device") or {}
+            after = round(
+                max(
+                    1.0,
+                    before
+                    + devices.get("Heating", 7.0) * heating_delta_c * 0.06
+                    - devices.get("Lighting", 3.0) * (light_pct / 100.0),
+                ),
+                2,
+            )
+            score = self.calculator.calc_sustainability_score(
+                after / 8.0, current_summary.get("room_temp", 21.0) + heating_delta_c
+            )["score"]
+            return {
+                "before_kwh": before,
+                "after_kwh": after,
+                "before_co2": self.calculator.calc_co2(before),
+                "after_co2": self.calculator.calc_co2(after),
+                "before_cost": self.calculator.calc_cost(before),
+                "after_cost": self.calculator.calc_cost(after),
+                "before_score": current_summary.get("score", 80),
+                "after_score": score,
+            }

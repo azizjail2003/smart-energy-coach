@@ -14,10 +14,13 @@ For example, `seed_if_empty()` hides building-scoped checks, fourteen-day hourly
 | `seed_if_empty` | `days: int = 14`, `building_id: str = "library"` | `int`; inserted row count, or `0` if that building already has data |
 | `simulate_live_step` | `building_id: str = "library"` | `list[dict]`; each dict has `timestamp`, `building_id`, `device_type`, `kwh`, `room_temp`, `co2_kg`, and `sustainability_score` |
 | `check_alerts` | `building_id`, `limits: dict \| None`, `recent_rows: list \| None` | `list[dict]`; alert keys are `building_id`, `timestamp`, `device_type`, `kwh`, `limit`, and `message` |
-| `get_dashboard_summary` | `building_id: str = "library"`, `limits: dict \| None = None` | Existing KPI keys plus `building_id`, `vs_last_week_pct`, `this_week_by_device`, `hourly_series`, `daily_totals`, `weekly_totals`, and `week_over_week` |
-| `get_aggregates` | `building_id: str = "library"` | Hourly series, prior-week hourly series, daily totals, weekly totals, and `by_device_week` |
+| `get_dashboard_summary` | `building_id: str = "library"`, `limits: dict \| None = None` | Existing KPI keys plus `building_id`, `vs_last_week_pct`, `this_week_by_device`, `hourly_series`, `last_week_hourly_series`, `daily_totals`, `weekly_totals`, `by_device_week`, `period`, `category`, and `week_over_week` |
+| `get_aggregates` | `period: str = "week"`, `category: str \| None = None`, `building_id: str = "library"` | Hourly series, prior-week hourly series, daily totals, weekly totals, `by_device_week`, `period`, and `category` |
 | `compute_week_over_week` | `building_id: str = "library"` | `this_week`, `last_week`, and `change_pct` for energy, CO2, and cost |
 | `simulate_scenario` | `current_summary: dict \| float \| str`, deltas, `building_id` | `dict` with the existing before/after kWh, CO2, cost, and score keys |
+| `get_score` | `building_id: str = "library"` | `dict` with `score`, `E`, `C`, `K`, `room_temp`, and `building_id` |
+| `get_alerts` | `building_id`, optional `limits` and `recent_rows` | Same alert list as `check_alerts()` |
+| `estimate_scenario` | `changes: dict`, `building_id` | Same exact scenario projection dictionary as `simulate_scenario()` |
 
 The service accepts an S3 `EnergyRepository`/MySQL adapter through dependency injection. A temporary path selects the local repository fallback, so isolated tests run without a live MySQL server. All reading and threshold operations are filtered by `building_id`, defaulting to `library`.
 
@@ -34,9 +37,9 @@ The daily dashboard totals are then derived from those latest readings:
 5. Savings compare usage with `config.BASELINE_DAILY_KWH`. The positive difference becomes `saved_kwh`, which is converted to `savings_eur` and `savings_co2`.
 6. `recent_rows` exposes the latest 32 MySQL repository rows as ordinary dictionaries for templates and consumers.
 
-`get_aggregates()` adds 24 hourly points, the same 24-hour window one week earlier, daily totals, weekly totals, and device totals for the latest 7-day weekly window. `compute_week_over_week()` compares the latest 672 readings with the previous 672 readings and returns percentage changes using the documented formula, or `0.0` when the prior value is zero.
+`get_aggregates(period="week", category=None, building_id="library")` adds 24 hourly points, the same 24-hour window one week earlier, daily totals, weekly totals, and device totals for the selected window. It supports `day`, `week`, and `month`, and returns `period` and normalized `category` metadata. Every series timestamp is a Python `datetime` truncated to the hour. `compute_week_over_week()` compares two 168-hour windows: the latest 168 hours (672 readings, four devices per hour) against the preceding 168 hours (the previous 672 readings), returning percentage changes using the documented formula, or `0.0` when the prior value is zero.
 
-Alerts use the same latest 16 rows. The effective threshold limits merge `config.DEFAULT_LIMITS` with caller-provided values, so `None`, an empty dictionary, or a partial dictionary cannot crash the check. A missing device-specific limit falls back to `2.0`. A row creates an alert only when its kWh value is strictly greater than its effective limit.
+Alerts use the same latest 16 rows. `AlertMonitor` loads stored limits for the requested building from the `alert_thresholds` table, then merges them with `config.DEFAULT_LIMITS` and caller-provided values. Therefore `None`, an empty dictionary, or a partial dictionary cannot crash the check. A missing device-specific limit falls back to `2.0`. A row creates an alert only when its kWh value is strictly greater than its effective limit.
 
 When the database is empty, the service returns a safe dashboard object with zero totals, neutral default score values, an empty device map, no alerts, and no recent rows.
 

@@ -33,6 +33,8 @@ CO2 = 10.0 x 0.38
 
 `calc_co2(10.0)` returns `3.8`.
 
+The result is rounded to two decimal places.
+
 ## Formula 2: Energy Cost
 
 ```text
@@ -47,6 +49,8 @@ Cost = 10.0 x 0.35
 ```
 
 `calc_cost(10.0)` returns `3.5`.
+
+The result is rounded to two decimal places.
 
 ## Formula 3: Comfort Index
 
@@ -65,6 +69,8 @@ K = 1.0 - (5.0 / 10.0)
 ```
 
 Therefore `calc_comfort(26.0)` returns `0.5`. At `21.0 C`, the difference is zero and `K = 1.0`. At `31.0 C` or `11.0 C`, the difference is `10.0 C` and `K = 0.0`. Larger differences remain `0.0` because of the clamp.
+
+The comfort result is rounded to two decimal places.
 
 ## Formula 4: Sustainability Score
 

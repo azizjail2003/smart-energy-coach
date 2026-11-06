@@ -1,4 +1,3 @@
-```markdown
 # AI-Powered Smart Energy Management System (FH Dortmund - Group 7)
 
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -15,7 +14,7 @@
 
 ## 1. Project Overview & Objectives
 
-The **AI-Powered Smart Energy Management System** is an end-to-end campus sustainability platform designed for **Topic 1** of the FH Dortmund Master's Capstone Project. With a primary operational focus on the **FH Dortmund Smart Library** (and extensible multi-building support for campus facilities such as `central_office`, `lecture-hall-a`, and `lab-building`), the system monitors device-level energy consumption, evaluates environmental and financial KPIs, detects threshold anomalies, simulates what-if conservation scenarios, and delivers actionable, AI-generated energy coaching.
+The **AI-Powered Smart Energy Management System** is an end-to-end campus sustainability platform designed for **Topic 1** of the FH Dortmund Master's Capstone Project. With a primary operational focus on the **FH Dortmund Smart Library** and multi-building support for `library`, `lecture-hall-a`, and `lab-building`, the system monitors device-level energy consumption, evaluates environmental and financial KPIs, detects threshold anomalies, simulates what-if conservation scenarios, and delivers actionable, AI-generated energy coaching.
 
 ### Core Objectives
 * **Carbon Footprint Reduction:** Continuously track electricity consumption across four primary campus device categories (**Heating**, **Lighting**, **Servers**, and **Other**) and quantify real-time CO₂ emissions.
@@ -78,7 +77,7 @@ Subsystem 1 serves as the analytical core of the application. It transforms raw 
 ### 4.1 The 5 Collaborating UML Classes
 
 1. **`EnergyReading` (`@dataclass`):**
-   * Validated data contract representing a single timestamped measurement across seven attributes: `timestamp`, `device_type`, `kwh`, `room_temp`, `co2_kg`, `sustainability_score` (aliased via `@property def score`), and `building_id` (defaulting to `"library"`).
+  * Validated data contract representing a single timestamped measurement across seven attributes: `timestamp` (`datetime`), `device_type`, `kwh`, `room_temp`, `co2_kg`, `sustainability_score` (aliased via `@property def score`), and `building_id` (defaulting to `"library"`).
    * Enforces strict pre-persistence data integrity via `validate()`:
      * Rejects negative energy consumption (`kWh < 0`).
      * Enforces realistic indoor temperature bounds (`0.0 °C <= room_temp <= 45.0 °C`).
@@ -87,11 +86,11 @@ Subsystem 1 serves as the analytical core of the application. It transforms raw 
 2. **`ScoreCalculator`:**
    * Pure, stateless mathematical engine with zero database or web dependencies (`S1-NFR1`, `S1-NFR2`). Computes CO₂, EUR cost, thermal comfort, and the weighted sustainability score using parameters from `config.py`.
 3. **`EnergySimulator`:**
-   * Generates realistic synthetic campus device telemetry governed by time-of-day occupancy multipliers, device base loads, and an isolated pseudo-random number generator (`random.Random(42)`).
+  * Generates realistic synthetic campus device telemetry governed by time-of-day occupancy multipliers, device base loads, and an isolated pseudo-random number generator (`random.Random(42)`). Returned timestamps are `datetime` objects.
 4. **`AlertMonitor`:**
    * Autonomous per-building threshold manager. Loads custom alert limits from persistent storage (`alert_thresholds` table), merges them safely with `config.DEFAULT_LIMITS`, and flags anomalous device readings.
 5. **`AnalyticsService` (Facade):**
-   * Unified service facade consumed by Subsystem 2 (Web UI) and Subsystem 3 (AI Coach). Coordinates seeding, live simulation steps, dashboard summaries, time-window aggregations, week-over-week comparisons, and what-if scenario projections over an injected S3 MySQL repository (or the built-in `SQLiteRepository` offline adapter).
+  * Unified service facade consumed by Subsystem 2 (Web UI) and Subsystem 3 (AI Coach). Coordinates seeding, live simulation steps, dashboard summaries, `get_score()`, `get_aggregates(period, category)`, `get_alerts()`, week-over-week comparisons, and `estimate_scenario(changes)` over an injected S3 MySQL repository (or the built-in `SQLiteRepository` offline adapter).
 
 ---
 
@@ -157,6 +156,7 @@ To guarantee reproducible unit tests, consistent UI demonstrations, and determin
   * **`last_week_hourly_series`:** Corresponding 24-hour series from 7 days prior for direct overlay charting.
   * **`daily_totals` & `weekly_totals`:** Aggregated kWh, CO₂ (kg), and Cost (€) for the 24-hour and 168-hour windows, including `vs_last_week_pct`.
   * **`by_device_week`:** 7-day cumulative kWh split across `Heating`, `Lighting`, `Servers`, and `Other`.
+  * Supports `period="day"`, `"week"`, and `"month"`, optional device `category`, and returns hourly series timestamps as Python `datetime` objects.
 * **Week-over-Week Comparison Engine (`compute_week_over_week`):**
   * Compares the trailing 7-day window (`latest - 167h` to `latest`) against the preceding 7-day window (`latest - 335h` to `latest - 167h`), returning exact percentage changes (`change_pct`) for `energy_kwh`, `co2_kg`, and `cost_eur`.
 * **What-If Scenario Projections (`simulate_scenario`):**
@@ -174,12 +174,12 @@ To guarantee reproducible unit tests, consistent UI demonstrations, and determin
 | **FR3** | Calculate CO₂ emissions and EUR cost | `ScoreCalculator.calc_co2()`, `calc_cost()` | `test_co2_and_cost_calculation` |
 | **FR4** | Calculate indoor thermal comfort index | `ScoreCalculator.calc_comfort()` | `test_comfort_score_at_ideal_temp` |
 | **FR5** | Calculate weighted sustainability score (0–100) | `ScoreCalculator.calc_sustainability_score()` | `test_comfort_score_at_ideal_temp` |
-| **FR6** | Produce unified dashboard KPIs & view model | `AnalyticsService.get_dashboard_summary()` | `test_seed_and_summary_with_temp_db` |
-| **FR7** | Detect threshold alerts & compute aggregations/WoW | `AlertMonitor.check_alerts()`, `get_aggregates()`, `compute_week_over_week()` | `test_week_over_week_and_time_aggregations`, `test_alert_monitor_loads_building_limits` |
+| **FR6** | Produce unified dashboard KPIs & view model | `AnalyticsService.get_dashboard_summary()`, `get_score()` | `test_seed_and_summary_with_temp_db`, `test_score_alerts_and_scenario_api` |
+| **FR7** | Detect threshold alerts & compute aggregations/WoW | `AlertMonitor.check_alerts()`, `get_alerts()`, `get_aggregates()`, `compute_week_over_week()` | `test_week_over_week_and_time_aggregations`, `test_alert_monitor_loads_building_limits`, `test_score_alerts_and_scenario_api` |
 | **FR8** | Calculate financial & carbon savings vs. baseline | `AnalyticsService.get_dashboard_summary()` | `test_seed_and_summary_with_temp_db` |
-| **FR9** | Project non-destructive What-If scenarios | `AnalyticsService.simulate_scenario()` | `test_scenario_reduces_energy_when_heating_lowered`, `test_uml_method_signature_compatibility` |
+| **FR9** | Project non-destructive What-If scenarios | `AnalyticsService.simulate_scenario()`, `estimate_scenario()` | `test_scenario_reduces_energy_when_heating_lowered`, `test_uml_method_signature_compatibility`, `test_score_alerts_and_scenario_api` |
 | **FR10** | Validate and persist readings per building | `EnergyReading.validate()`, `save_reading()` | `test_reading_validation_rejects_negative_kwh`, `test_building_isolation` |
-| **NFR1–10** | `< 50 ms` calc, determinism (`seed=42`), modular facade, type safety, safe fallbacks | `s1_analytics.py` & `config.py` | Full 10-test suite in `tests/test_s1_analytics.py` |
+| **NFR1–10** | `< 50 ms` calc, determinism (`seed=42`), modular facade, type safety, safe fallbacks | `s1_analytics.py` & `config.py` | Full 14-test suite in `tests/test_s1_analytics.py`, including `test_returned_timestamps_are_datetime_objects` |
 
 ---
 
@@ -340,11 +340,11 @@ Open `http://127.0.0.1:5000` (Flask) or `http://127.0.0.1:8000` (Gunicorn) in yo
 ### 5. Run the Automated Test Suite
 Execute the full Pytest suite (covering S1 analytics, S2 web routes/forms, and S3 persistence/AI fallback):
 ```bash
-pytest -v
+python -m pytest -v
 ```
 To run only Subsystem 1's unit and performance tests:
 ```bash
-pytest tests/test_s1_analytics.py -v
+python -m pytest tests/test_s1_analytics.py -v
 ```
 To verify syntax compilation across core modules:
 ```bash
@@ -383,5 +383,4 @@ docker compose up --build
 
 ---
 
-*Developed the Master's Capstone Project at **Fachhochschule Dortmund** by **Group 7** (Abdelhamid Ahbane, Abdelaziz Jail, and Nestor David Carrizo).*
-```
+*Developed for the Master's Python Capstone Project at **Fachhochschule Dortmund** by **Group 7** (Abdelhamid Ahbane, Abdelaziz Jail, and Nestor David Carrizo).*

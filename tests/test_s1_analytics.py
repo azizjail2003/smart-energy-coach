@@ -56,6 +56,10 @@ def test_reading_validation_rejects_negative_kwh():
         reading(room_temp=-2.0).validate()
     with pytest.raises(ValueError):
         reading(device_type="Toaster").validate()
+    with pytest.raises(ValueError):
+        reading(building_id="").validate()
+    with pytest.raises(ValueError):
+        reading(building_id="   ").validate()
 
 
 def test_scenario_reduces_energy_when_heating_lowered(tmp_path):
@@ -81,6 +85,7 @@ def test_seed_and_summary_with_temp_db(tmp_path):
     elapsed = time.perf_counter() - started
 
     assert inserted == 1344
+    assert elapsed < 10.0
     assert service.seed_if_empty() == 0
 
     summary = service.get_dashboard_summary()
@@ -137,21 +142,25 @@ def test_building_isolation(tmp_path):
     service = AnalyticsService(str(tmp_path / "buildings.db"))
 
     assert service.seed_if_empty(days=1, building_id="library") == 96
-    assert service.seed_if_empty(days=1, building_id="central_office") == 96
+    assert service.seed_if_empty(days=1, building_id="lecture-hall-a") == 96
+    assert service.seed_if_empty(days=1, building_id="lab-building") == 96
     library = service.get_dashboard_summary("library")
-    office = service.get_dashboard_summary("central_office")
+    lecture_hall = service.get_dashboard_summary("lecture-hall-a")
+    lab = service.get_dashboard_summary("lab-building")
 
     assert library["building_id"] == "library"
-    assert office["building_id"] == "central_office"
+    assert lecture_hall["building_id"] == "lecture-hall-a"
+    assert lab["building_id"] == "lab-building"
     assert all(row["building_id"] == "library" for row in library["recent_rows"])
-    assert all(row["building_id"] == "central_office" for row in office["recent_rows"])
+    assert all(row["building_id"] == "lecture-hall-a" for row in lecture_hall["recent_rows"])
+    assert all(row["building_id"] == "lab-building" for row in lab["recent_rows"])
 
 
 def test_alert_monitor_loads_building_limits(tmp_path):
     service = AnalyticsService(str(tmp_path / "limits.db"))
     service.repository.save_limit("library", "Heating", 0.01)
     reading = EnergyReading(
-        "2026-10-28 14:00", "Heating", 1.0, 21.0, 0.38, 80, "library"
+        datetime(2026, 10, 28, 14, 0), "Heating", 1.0, 21.0, 0.38, 80, "library"
     )
     service.save_reading(reading)
 
@@ -160,6 +169,23 @@ def test_alert_monitor_loads_building_limits(tmp_path):
 
     assert limits["Heating"] == 0.01
     assert any(alert["building_id"] == "library" for alert in alerts)
+
+
+def test_score_alerts_and_scenario_api(tmp_path):
+    service = AnalyticsService(str(tmp_path / "api.db"))
+    service.seed_if_empty(days=14)
+
+    score = service.get_score()
+    aggregates = service.get_aggregates(period="day", category="heating")
+    alerts = service.get_alerts()
+    scenario = service.estimate_scenario({"heating_delta": -1.0, "lighting_reduction": 20.0})
+
+    assert set(score) == {"score", "E", "C", "K", "room_temp", "building_id"}
+    assert score["building_id"] == "library"
+    assert aggregates["period"] == "day"
+    assert aggregates["category"] == "Heating"
+    assert isinstance(alerts, list)
+    assert set(scenario) == {"before_kwh", "after_kwh", "before_co2", "after_co2", "before_cost", "after_cost", "before_score", "after_score"}
 
 def test_single_calculation_performance_under_50ms():
     simulator = EnergySimulator()
@@ -192,7 +218,9 @@ def test_uml_method_signature_compatibility(tmp_path):
     result = service.simulate_scenario(-1.5, 25.0)
 
     assert reading.device_type == "Lighting"
-    assert reading.timestamp.endswith(" 14:00")
+    assert isinstance(reading.timestamp, datetime)
+    assert reading.timestamp.hour == 14
+    assert reading.timestamp.minute == 0
     assert {
         "before_kwh",
         "after_kwh",
@@ -203,3 +231,18 @@ def test_uml_method_signature_compatibility(tmp_path):
         "before_score",
         "after_score",
     } == set(result)
+
+
+def test_returned_timestamps_are_datetime_objects(tmp_path):
+    service = AnalyticsService(str(tmp_path / "timestamps.db"))
+    service.seed_if_empty(days=14)
+    summary = service.get_dashboard_summary()
+    aggregates = service.get_aggregates()
+    alerts = service.get_alerts(limits={"Heating": 0.01})
+
+    assert isinstance(summary["recent_rows"][0]["timestamp"], datetime)
+    assert isinstance(aggregates["hourly_series"][0]["timestamp"], datetime)
+    assert isinstance(aggregates["last_week_hourly_series"][0]["timestamp"], datetime)
+    assert alerts
+    assert isinstance(alerts[0]["timestamp"], datetime)
+    assert isinstance(service.simulate_live_step()[0]["timestamp"], datetime)

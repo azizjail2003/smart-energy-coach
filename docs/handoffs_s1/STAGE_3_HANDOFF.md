@@ -8,7 +8,7 @@ Stage 3 adds `EnergySimulator`, which creates realistic synthetic campus energy 
 
 The simulator uses `RANDOM_SEED = 42` by default and owns an isolated `random.Random(seed)` instance. This keeps S1-NFR4 deterministic without mutating Python's global random state. `set_seed()` resets that private stream when a repeatable alternate scenario is required.
 
-Each reading carries a `building_id`, defaulting to `library`. The same generation logic can therefore produce independent histories for `library` and `central_office` without mixing persistence, limits, alerts, or aggregates.
+Each reading carries a `building_id`, defaulting to `library`. The same generation logic can therefore produce independent histories for `library`, `lecture-hall-a`, and `lab-building` without mixing persistence, limits, alerts, or aggregates.
 
 ## Campus Behavior Model
 
@@ -41,7 +41,7 @@ kWh = 0.5 x 1.4 x 1.10
      = 0.77 kWh
 ```
 
-The simulator then calculates CO2 and sustainability score through `ScoreCalculator`, creates the timestamp in `%Y-%m-%d %H:%M` format, validates the record, and returns it.
+The simulator then calculates CO2 and sustainability score through ScoreCalculator, sets the timestamp as a minute-precision Python datetime object, validates the record, and returns it.
 
 ## Why On-Demand Seeding
 
@@ -65,11 +65,11 @@ The timestamp parameter accepts all three supported forms:
 - A `datetime`: use that exact datetime.
 - `building_id`: attach the reading to the requested building, defaulting to `library`.
 
-The method applies the daytime or nighttime multiplier, generates bounded random energy and temperature values, delegates derived calculations to `ScoreCalculator`, and calls `EnergyReading.validate()` before returning.
+The method applies the daytime or nighttime multiplier, generates bounded random energy and temperature values, delegates derived calculations to `ScoreCalculator`, and sets `timestamp` as a minute-precision Python `datetime` object before calling `EnergyReading.validate()`.
 
-### `seed_history(days=14, building_id="library")`
+### `seed_history(days=14, building_id="library", reference_time=None)`
 
-The method rounds the current time down to the hour, moves backward in one-hour steps, and generates one reading for every configured device at each timestamp. It returns a plain `list[EnergyReading]`, leaving persistence to `AnalyticsService` and S3's repository layer.
+The method rounds reference_time (or the current time when None) down to the hour, moves backward in one-hour steps, and generates one reading for every configured device at each timestamp. It returns a plain `list[EnergyReading]`, leaving persistence to `AnalyticsService` and S3's repository layer.
 
 ## Stage 4 Persistence Preview
 
