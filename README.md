@@ -8,7 +8,7 @@ Capstone Team IV, Fachhochschule Dortmund. A web application that monitors the e
 | --- | --- | --- |
 | Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics` |
 | Abdelaziz Jail | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
-| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_ai_data` |
+| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_coach` |
 
 ## System Design
 
@@ -86,7 +86,7 @@ Added by the S1 owner.
 
 ### S3 – AI Coach, Data Persistence & Deployment
 
-Five main OOP classes. `AICoach` is the central orchestrator and the only class external subsystems interact with; it manages caching via `MySQLRepository` and delegates generation to a strategy interface (`LLMClient`) implemented by `OpenAIClient`, `NVIDIAClient`, and `FallbackCoach`. Every private attribute uses strict `@property` getters and setters to ensure secure state initialization and encapsulation. This subsystem also includes an integration test suite to validate database persistence and seamless AI strategy fallback logic.
+Six main classes. `AICoach` is the central orchestrator that S1 and S2 interact with; it manages caching via `MySQLRepository` and delegates generation to a strategy interface (`LLMClient`) implemented by `OpenAIClient`, `NVIDIAClient`, and `FallbackCoach`. Domain errors are handled through the `S3CoachError` exception hierarchy. Every private attribute uses `@property` getters and setters for state initialization and encapsulation.
 
 ```mermaid
 classDiagram
@@ -141,6 +141,16 @@ classDiagram
         +get_recommendation(building, anomaly_data, tone) str
         +ask(question, tone, building) dict
         +status() str
+        +tips(building) list
+    }
+
+    class S3CoachError {
+        <<Exception>>
+        -_message
+        -_error_code
+        +message «property»
+        +error_code «property»
+        -_setup_error(message, error_code)
     }
 
     LLMClient <|.. OpenAIClient : implements
@@ -151,6 +161,8 @@ classDiagram
     AICoach *-- OpenAIClient : strategy
     AICoach *-- NVIDIAClient : strategy
     AICoach o-- MySQLRepository : persistence
+    AICoach ..> S3CoachError : raises
+    MySQLRepository ..> S3CoachError : raises
 ```
 
 | Class | File | Role |
@@ -159,7 +171,9 @@ classDiagram
 | `MySQLRepository` | `subsystems/s3_coach/s3_repository.py` | Handles database persistence and retrieves cached AI recommendations. |
 | `LLMClient` | `subsystems/s3_coach/s3_ai_coach.py` | Abstract interface defining the contract for all AI recommendation engines. |
 | `OpenAIClient` & `NVIDIAClient` | `subsystems/s3_coach/s3_ai_coach.py` | Live API strategies with secure environment key encapsulation. |
-| `FallbackCoach` | `subsystems/s3_coach/s3_ai_coach.py` | Rule-based local engine for offline or API-quota-exceeded scenarios. |
+| `FallbackCoach` | `subsystems/s3_coach/s3_ai_coach.py` | Rule-based local engine for offline or API-error scenarios. |
+| `S3CoachError` | `subsystems/s3_coach/s3_errors.py` | Custom exception hierarchy (`S3ConfigurationError`, `S3APIError`, `S3DatabaseError`). |
+| `AIRecommendation` | `subsystems/s3_coach/s3_models.py` | SQLAlchemy ORM model for the `ai_recommendations` caching table. |
 
 ## Presentation Link
 
@@ -429,10 +443,8 @@ subsystems/
     s3_models.py         SQLAlchemy declarative base, Enums, and ORM models (7 tables)
     s3_repository.py     MySQLRepository: encapsulated database session management
     s3_ai_coach.py       AICoach orchestrator and Strategy implementations (LLMClient)
-tests/s3/
-    test_s3_models.py    unit tests for ORM models and Enums
-    test_s3_repository.py isolated database tests using in-memory SQLite
-    test_s3_ai_coach.py  mocked tests for AI cache hits and fallback strategies
+    s3_errors.py         Custom OOP exception hierarchy (S3CoachError, S3ConfigurationError, etc.)
+tests/s3/                Unified test suite covering models, repository, coach, and error handling
 ```
 
 ## Database Schema (SQLAlchemy ORM)
@@ -443,7 +455,7 @@ Tables managed: `buildings`, `devices`, `energy_logs`, `alerts`, `sustainability
 
 ## Service Integration (Internal Python API)
 
-S2 and S1 interact with S3 exclusively through the instantiated `AICoach` and `MySQLRepository` objects. The orchestrator automatically handles cache lookups, API failures, and fallbacks.
+S2 and S1 interact with S3 exclusively through the instantiated `AICoach` and `MySQLRepository` objects. The orchestrator automatically handles cache lookups, API failures, and fallbacks, raising custom `S3CoachError` exceptions if invalid states are injected.
 
 ```python
 class AICoach:
@@ -459,7 +471,10 @@ class AICoach:
     # Returns: "Online", "Fallback", or "Cached" based on the last interaction
     
     get_recommendation(building_id: str, anomaly_data: dict, tone: str="analytical") -> str
-    # Returns: the recommendation string.
+    # Returns: the recommendation string (JSON format).
+
+    tips(building_id: str) -> list
+    # Returns: A list of actionable daily energy tips for the S2 Dashboard.
 
 class MySQLRepository:
     session: Session                       # SQLAlchemy session, protected via @property
@@ -469,10 +484,10 @@ class MySQLRepository:
     save_ai_recommendation(building_id, context_hash, tone, response, source, tokens)
     
     # S1 & S2 Data Contracts
-    save_readings(readings: list) -> None
-    get_logs(start: datetime, end: datetime, category=None) -> list
-    save_alert(alert: dict) -> None
-    save_alert_limit(building_id: str, category: str, limit_kwh: float) -> None
+    get_limits(building_id: str) -> dict
+    save_limits(building_id: str, limits: dict) -> None
+    save_energy_log(building_id: str, device_id: int, timestamp: datetime, consumption: float, co2: float, temp: float, comfort: float) -> None
+    save_alert(building_id: str, timestamp: datetime, alert_type: str, message: str, threshold: float, value: float) -> None
 ```
 
 ## AI Caching Strategy
