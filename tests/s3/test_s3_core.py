@@ -75,13 +75,13 @@ class TestS3Subsystem(unittest.TestCase):
 
         first_res = self.coach.ask("How to reduce HVAC load?", "encouraging", "library")
         self.assertEqual(first_res["source"], "fallback")
-        self.assertEqual(self.coach.status(), "Fallback")
+        self.assertEqual(self.coach.status(), "fallback")
 
         # Second identical call must return from cache
         second_res = self.coach.ask("How to reduce HVAC load?", "encouraging", "library")
-        self.assertEqual(second_res["source"], "cache")
+        self.assertEqual(second_res["source"], "cached")
         self.assertEqual(second_res["answer"], first_res["answer"])
-        self.assertEqual(self.coach.status(), "Cached")
+        self.assertEqual(self.coach.status(), "cached")
 
     # TEST 4: Live API Success Path (Mocked OpenAI Strategy)
     def test_04_ask_returns_openai_response_when_live_api_succeeds(self):
@@ -97,7 +97,7 @@ class TestS3Subsystem(unittest.TestCase):
 
         self.assertEqual(result["source"], "openai")
         self.assertEqual(result["answer"], "Dim library lights by 20% in the afternoon.")
-        self.assertEqual(self.coach.status(), "Online")
+        self.assertEqual(self.coach.status(), "online")
 
     # TEST 5: FallbackCoach Rule Engine & Tone Formatting
     def test_05_fallback_coach_handles_anomalies_and_tones(self):
