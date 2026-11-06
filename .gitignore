@@ -1,5 +1,9 @@
 .venv/
 __pycache__/
+
+test_coach.py
+test_repo.py
+
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
