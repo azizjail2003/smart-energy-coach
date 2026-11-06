@@ -36,34 +36,28 @@ The system is architected into three decoupled subsystems with strict facade and
 
 ---
 
+```markdown
 ## 3. Repository Structure
 
 ```text
 .
-├── config.py                          # Shared system constants, DB credentials, and OpenAI config
-├── wsgi.py                            # WSGI entry point for Flask development and Gunicorn workers
-├── requirements.txt                   # Python dependencies
-├── docker-compose.yml                 # Multi-container orchestration (Flask Web App + MySQL 8.0)
-├── STAGE_5_FINAL_MASTER_HANDOFF.md    # Subsystem 1 complete specification & handoff guide
-├── data/
-│   └── energy.db                      # Local SQLite database (offline/test fallback)
+├── config.py                                  # Shared system constants, DB credentials, and OpenAI config
+├── README.md                                  # Project & Subsystem 1 documentation
+├── requirements.txt                           # Verified Python dependencies
+├── docs/                                      # Subsystem 1 UML class diagrams & staged handoff docs
+│   ├── Class_diagram_s1/
+│   │   ├── class-diagram-s1-svg.svg           # Subsystem 1 UML Class Diagram (SVG)
+│   │   └── class-diagram-s1.png               # Subsystem 1 UML Class Diagram (PNG)
+│   └── handoffs_s1/
+│       ├── STAGE_1_HANDOFF.md                 # Stage 1: EnergyReading data contract & validation
+│       ├── STAGE_2_HANDOFF.md                 # Stage 2: ScoreCalculator mathematical engine
+│       ├── STAGE_3_HANDOFF.md                 # Stage 3: EnergySimulator & 14-day seeding
+│       ├── STAGE_4_HANDOFF.md                 # Stage 4: AnalyticsService facade & AlertMonitor
+│       └── STAGE_5_FINAL_MASTER_HANDOFF.md    # Stage 5: Final Subsystem 1 master handoff & scripts
 ├── subsystems/
-│   ├── s1_analytics.py                # Subsystem 1: Simulation, ScoreCalculator, AlertMonitor, AnalyticsService
-│   ├── s2_web/                        # Subsystem 2: Flask UI, ChartPresenter, Forms, Views, & JSON APIs
-│   │   ├── __init__.py                # Flask app factory, CSRF, and error handlers
-│   │   ├── catalog.py                 # Accepted buildings, device categories, tones, and periods
-│   │   ├── forms.py                   # ScenarioForm and ThresholdForm (Flask-WTF)
-│   │   ├── presenter.py               # ChartPresenter (Chart.js formatting in Europe/Berlin timezone)
-│   │   ├── services/                  # Service adapters bridging S2 routes to S1 and S3
-│   │   ├── views/                     # PageView, CoachView, HTML routes, and REST API blueprints
-│   │   ├── templates/                 # Jinja2 HTML5 templates (Dashboard, History, Scenarios, Coach, Settings)
-│   │   └── static/                    # CSS, vanilla JS, and Chart.js assets
-│   └── s3_ai_data/                    # Subsystem 3: OpenAI Coach, Fallback Coach, and MySQL Repository
+│   └── s1_analytics.py                        # Subsystem 1: Simulation, ScoreCalculator, AlertMonitor, AnalyticsService
 └── tests/
-    ├── test_s1_analytics.py           # Subsystem 1 unit, performance, and determinism test suite
-    ├── s2/                            # Subsystem 2 Flask route, form, and API test suite
-    └── s3/                            # Subsystem 3 AI Coach and database persistence test suite
-```
+    └── test_s1_analytics.py                   # Subsystem 1 unit, performance, and determinism test suite (14 tests)
 
 ---
 
@@ -75,6 +69,92 @@ The system is architected into three decoupled subsystems with strict facade and
 Subsystem 1 serves as the analytical core of the application. It transforms raw or simulated device telemetry into validated readings, environmental metrics, composite sustainability scores, threshold alerts, time-series aggregations, and scenario projections without exposing internal SQL or mathematical formulas to downstream consumers.
 
 ### 4.1 The 5 Collaborating UML Classes
+
+```mermaid
+classDiagram
+    direction TB
+
+    class AnalyticsService {
+        <<Facade>>
+        +str db_path
+        +SQLiteRepository repository
+        +ScoreCalculator calculator
+        +EnergySimulator simulator
+        +AlertMonitor alert_monitor
+        +save_reading(reading: EnergyReading) None
+        +seed_if_empty(days: int, building_id: str) int
+        +simulate_live_step(building_id: str) list~dict~
+        +get_dashboard_summary(building_id: str, limits: dict) dict
+        +get_score(building_id: str) dict
+        +get_aggregates(period: str, category: str, building_id: str) dict
+        +compute_week_over_week(building_id: str) dict
+        +check_alerts(building_id: str, limits: dict, recent_rows: list) list~dict~
+        +get_alerts(building_id: str, limits: dict, recent_rows: list) list~dict~
+        +simulate_scenario(current_summary: dict, heating_delta_c: float, light_reduction_pct: float, building_id: str) dict
+        +estimate_scenario(changes: dict, building_id: str) dict
+    }
+
+    class EnergySimulator {
+        +ScoreCalculator calculator
+        +int seed
+        +list~str~ devices
+        +dict~str, float~ base_loads
+        +set_seed(seed: int) None
+        +generate_reading(device: str, ts: datetime, building_id: str) EnergyReading
+        +seed_history(days: int, building_id: str, reference_time: datetime) list~EnergyReading~
+    }
+
+    class ScoreCalculator {
+        +float co2_factor
+        +float cost_factor
+        +float cost_per_kwh
+        +float ideal_temp
+        +calc_co2(kwh: float) float
+        +calc_cost(kwh: float) float
+        +calc_comfort(room_temp: float) float
+        +calc_sustainability_score(total_hourly_kwh: float, room_temp: float) dict
+    }
+
+    class AlertMonitor {
+        +SQLiteRepository repository
+        +dict~str, float~ default_limits
+        +get_limits_for_building(building_id: str) dict~str, float~
+        +check_alerts(building_id: str, readings: list, limits: dict) list~dict~
+    }
+
+    class EnergyReading {
+        <<dataclass>>
+        +datetime timestamp
+        +str device_type
+        +float kwh
+        +float room_temp
+        +float co2_kg
+        +int sustainability_score
+        +str building_id
+        +int score
+        +validate() bool
+        +to_dict() dict
+    }
+
+    class SQLiteRepository {
+        <<Repository>>
+        +str db_path
+        +count_readings(building_id: str) int
+        +insert_readings(readings: list~EnergyReading~) None
+        +fetch_readings(building_id: str, limit: int) list~dict~
+        +get_limits_for_building(building_id: str) dict~str, float~
+        +save_limit(building_id: str, device_type: str, limit: float) None
+    }
+
+    AnalyticsService *-- "1" ScoreCalculator : owns
+    AnalyticsService *-- "1" EnergySimulator : owns
+    AnalyticsService *-- "1" AlertMonitor : owns
+    AnalyticsService o-- "1" SQLiteRepository : delegates persistence
+    EnergySimulator o-- "1" ScoreCalculator : computes score & CO2
+    EnergySimulator ..> EnergyReading : creates & validates
+    AlertMonitor o-- "1" SQLiteRepository : loads thresholds
+    SQLiteRepository ..> EnergyReading : persists
+```
 
 1. **`EnergyReading` (`@dataclass`):**
   * Validated data contract representing a single timestamped measurement across seven attributes: `timestamp` (`datetime`), `device_type`, `kwh`, `room_temp`, `co2_kg`, `sustainability_score` (aliased via `@property def score`), and `building_id` (defaulting to `"library"`).
