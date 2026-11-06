@@ -1,9 +1,9 @@
 """
-Database models for Subsystem 3: AI, Data Persistence & Deployment.
+Database models and enumerations for Subsystem 3.
 Defines the SQLAlchemy ORM.
-7 tables specified in the architecture.
 """
 import enum
+from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Enum, ForeignKey, CheckConstraint, Numeric, BigInteger, DateTime, Text
 )
@@ -22,11 +22,13 @@ class DeviceCategory(enum.Enum):
     Other = 'Other'
 
 class ToneEnum(enum.Enum):
+    """Enumeration for the available AI personality tones."""
     strict = 'strict'
     analytical = 'analytical'
     encouraging = 'encouraging'
 
 class SourceEnum(enum.Enum):
+    """Enumeration for the source of the AI recommendation."""
     openai = 'openai'
     fallback = 'fallback'
     nvidia = 'nvidia'
