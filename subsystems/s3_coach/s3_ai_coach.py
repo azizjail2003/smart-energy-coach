@@ -232,11 +232,16 @@ class AICoach:
         self._initialize_strategies()
 
     def _initialize_strategies(self) -> None:
-        """Instantiates recommendation engine strategies."""
-        self.last_source = "online"
+        """Instantiates recommendation engine strategies and detects initial connectivity state."""
         self._fallback_engine = FallbackCoach()
         self._nvidia_engine = NVIDIAClient()
         self._openai_engine = OpenAIClient()
+        
+        # Check if at least one API key is present in the environment
+        if self._nvidia_engine.api_key or self._openai_engine.api_key:
+            self.last_source = "online"
+        else:
+            self.last_source = "fallback"
 
     @property
     def repo(self) -> MySQLRepository:
