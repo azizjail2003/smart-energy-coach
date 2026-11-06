@@ -223,7 +223,7 @@ class AICoach:
     
     def __init__(self, repository: MySQLRepository):
         self._repo: Optional[MySQLRepository] = None
-        self._last_source: str = "Online"
+        self._last_source: str = "online"
         self._fallback_engine: Optional[FallbackCoach] = None
         self._nvidia_engine: Optional[NVIDIAClient] = None
         self._openai_engine: Optional[OpenAIClient] = None
@@ -233,7 +233,7 @@ class AICoach:
 
     def _initialize_strategies(self) -> None:
         """Instantiates recommendation engine strategies."""
-        self.last_source = "Online"
+        self.last_source = "online"
         self._fallback_engine = FallbackCoach()
         self._nvidia_engine = NVIDIAClient()
         self._openai_engine = OpenAIClient()
@@ -254,7 +254,7 @@ class AICoach:
 
     @last_source.setter
     def last_source(self, value: str) -> None:
-        valid_sources = ["Online", "Fallback", "Cached"]
+        valid_sources = ["online", "fallback", "cached"]
         if value not in valid_sources:
             raise S3ConfigurationError(f"Invalid status source. Must be one of {valid_sources}")
         self._last_source = value
@@ -286,25 +286,25 @@ class AICoach:
         cached_response = self.repo.get_cached_recommendation(building_id, context_hash)
         
         if cached_response:
-            self.last_source = "Cached" 
+            self.last_source = "cached" 
             return cached_response
 
         response_text = None
-        source = "Fallback"
+        source = "fallback"
         
         try:
             response_text = self._nvidia_engine.generate_recommendation(anomaly_data, tone)
             source = "nvidia"
-            self.last_source = "Online"
+            self.last_source = "online"
         except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
             try:
                 response_text = self._openai_engine.generate_recommendation(anomaly_data, tone)
                 source = "openai"
-                self.last_source = "Online"
+                self.last_source = "online"
             except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
                 response_text = self._fallback_engine.generate_recommendation(anomaly_data, tone)
                 source = "fallback"
-                self.last_source = "Fallback"
+                self.last_source = "fallback"
             
         self.repo.save_ai_recommendation(
             building_id=building_id,
@@ -331,10 +331,10 @@ class AICoach:
         cached_response = self.repo.get_cached_recommendation(building_id, context_hash)
 
         if cached_response:
-            self.last_source = "Cached"
+            self.last_source = "cached"
             return {
                 "answer": self._extract_clean_text(cached_response),
-                "source": "cache",
+                "source": "cached",
             }
 
         response_text = None
@@ -343,16 +343,16 @@ class AICoach:
         try:
             response_text = self._nvidia_engine.generate_recommendation(payload, tone)
             source = "nvidia"
-            self._last_source = "Online"
+            self._last_source = "online"
         except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
             try:
                 response_text = self._openai_engine.generate_recommendation(payload, tone)
                 source = "openai"
-                self._last_source = "Online"
+                self._last_source = "online"
             except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
                 response_text = self._fallback_engine.generate_recommendation(payload, tone)
                 source = "fallback"
-                self._last_source = "Fallback"
+                self._last_source = "fallback"
 
         clean_answer = self._extract_clean_text(response_text)
 
@@ -372,7 +372,7 @@ class AICoach:
 
     def status(self) -> str:
         """
-        Returns the current service status for S2 badges ('Online', 'Fallback', or 'Cached').
+        Returns the current service status for S2 badges ('online', 'fallback', or 'cached').
         """
         return self.last_source
 
