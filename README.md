@@ -36,7 +36,6 @@ The system is architected into three decoupled subsystems with strict facade and
 
 ---
 
-```markdown
 ## 3. Repository Structure
 
 ```text
@@ -58,6 +57,7 @@ The system is architected into three decoupled subsystems with strict facade and
 │   └── s1_analytics.py                        # Subsystem 1: Simulation, ScoreCalculator, AlertMonitor, AnalyticsService
 └── tests/
     └── test_s1_analytics.py                   # Subsystem 1 unit, performance, and determinism test suite (14 tests)
+```
 
 ---
 
