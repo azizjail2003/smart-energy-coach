@@ -94,7 +94,7 @@ classDiagram
     
     class LLMClient {
         <<Interface>>
-        +generate_recommendation(anomaly_data, tone) str
+        +generate_recommendation(payload, tone) str
     }
     
     class OpenAIClient {
@@ -102,7 +102,7 @@ classDiagram
         -_client
         +api_key «property»
         -_setup_client()
-        +generate_recommendation(anomaly_data, tone) str
+        +generate_recommendation(payload, tone) str
     }
     
     class NVIDIAClient {
@@ -110,22 +110,26 @@ classDiagram
         -_client
         +api_key «property»
         -_setup_client()
-        +generate_recommendation(anomaly_data, tone) str
+        +generate_recommendation(payload, tone) str
     }
     
     class FallbackCoach {
         -_engine_name
         +engine_name «property»
         -_setup_engine()
-        +generate_recommendation(anomaly_data, tone) str
+        +generate_recommendation(payload, tone) str
     }
     
     class MySQLRepository {
         -_session
         +session «property»
         -_setup_repository(session)
+        +get_limits(building_id) dict
+        +save_limits(building_id, limits)
+        +save_energy_log(building_id, device_id, timestamp, consumption, co2, temp, comfort)
+        +save_alert(building_id, timestamp, alert_type, message, threshold, value)
         +get_cached_recommendation(building_id, context_hash) str
-        +save_ai_recommendation(building, hash, tone, response, source, tokens)
+        +save_ai_recommendation(building_id, context_hash, tone, response, source, tokens)
     }
     
     class AICoach {
@@ -137,20 +141,23 @@ classDiagram
         +repo «property»
         +last_source «property»
         -_initialize_strategies()
-        -_generate_hash(data, tone) str
-        +get_recommendation(building, anomaly_data, tone) str
-        +ask(question, tone, building) dict
+        -_generate_hash(payload, tone) str
+        +get_recommendation(building_id, payload, tone) str
+        +ask(question, tone, building_id) dict
         +status() str
-        +tips(building) list
+        +tips(building_id) list
     }
 
-    class S3CoachError {
+    class S3ConfigurationError {
         <<Exception>>
-        -_message
-        -_error_code
-        +message «property»
-        +error_code «property»
-        -_setup_error(message, error_code)
+    }
+    
+    class S3DatabaseError {
+        <<Exception>>
+    }
+
+    class S3APIError {
+        <<Exception>>
     }
 
     LLMClient <|.. OpenAIClient : implements
@@ -161,8 +168,11 @@ classDiagram
     AICoach *-- OpenAIClient : strategy
     AICoach *-- NVIDIAClient : strategy
     AICoach o-- MySQLRepository : persistence
-    AICoach ..> S3CoachError : raises
-    MySQLRepository ..> S3CoachError : raises
+    
+    AICoach ..> S3ConfigurationError : raises
+    AICoach ..> S3APIError : catches
+    MySQLRepository ..> S3DatabaseError : raises
+    MySQLRepository ..> S3ConfigurationError : raises
 ```
 
 | Class | File | Role |
