@@ -16,3 +16,6 @@ htmlcov/
 instance/
 
 .DS_Store
+
+test_coach.py
+test_repo.py
