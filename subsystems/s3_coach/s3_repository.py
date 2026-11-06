@@ -5,12 +5,16 @@ Implements the data access methods required by S1 (Analytics) and S3 (AI Coach)
 
 from typing import Dict, Optional
 from datetime import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from subsystems.s3_coach.s3_models import (
     EnergyLog, Alert, AIRecommendation, Setting, DeviceCategory, ToneEnum, SourceEnum
 )
 from subsystems.s3_coach.s3_errors import S3ConfigurationError, S3DatabaseError
+import os
+from sqlalchemy import create_engine
+from subsystems.s3_coach.s3_models import Base
+from dotenv import load_dotenv
 
 class MySQLRepository:
     """Implementation of the EnergyRepository using SQLAlchemy."""
@@ -176,3 +180,28 @@ class MySQLRepository:
         except SQLAlchemyError as exc:
             self.session.rollback()
             raise S3DatabaseError(f"Failed to save AI recommendation: {exc}") from exc
+
+def get_session() -> Session:
+    """
+    Loads database configuration from the .env file, initializes the SQLAlchemy engine,
+    creates the necessary tables if they do not exist, and returns a new Session.
+    
+    If DATABASE_URL is not set, it defaults to a local SQLite file for easy testing.
+    """
+    # Load environment variables from .env file
+    load_dotenv()
+
+    # Get the connection string, default to SQLite if not provided in .env
+    db_url = os.getenv("DATABASE_URL", "sqlite:///smart_energy.db")
+
+    # Create the SQLAlchemy engine
+    engine = create_engine(db_url)
+
+    # Ensure all tables defined in S3 models are created in the database
+    Base.metadata.create_all(engine)
+
+    # Create a session factory bound to this engine
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    
+    # Return a new session instance for S2 to use
+    return SessionLocal()
