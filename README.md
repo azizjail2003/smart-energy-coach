@@ -86,7 +86,80 @@ Added by the S1 owner.
 
 ### S3 – AI Coach, Data Persistence & Deployment
 
-Added by the S3 owner.
+Five main OOP classes. `AICoach` is the central orchestrator and the only class external subsystems interact with; it manages caching via `MySQLRepository` and delegates generation to a strategy interface (`LLMClient`) implemented by `OpenAIClient`, `NVIDIAClient`, and `FallbackCoach`. Every private attribute uses strict `@property` getters and setters to ensure secure state initialization and encapsulation. This subsystem also includes an integration test suite to validate database persistence and seamless AI strategy fallback logic.
+
+```mermaid
+classDiagram
+    direction LR
+    
+    class LLMClient {
+        <<Interface>>
+        +generate_recommendation(anomaly_data, tone) str
+    }
+    
+    class OpenAIClient {
+        -_api_key
+        -_client
+        +api_key «property»
+        -_setup_client()
+        +generate_recommendation(anomaly_data, tone) str
+    }
+    
+    class NVIDIAClient {
+        -_api_key
+        -_client
+        +api_key «property»
+        -_setup_client()
+        +generate_recommendation(anomaly_data, tone) str
+    }
+    
+    class FallbackCoach {
+        -_engine_name
+        +engine_name «property»
+        -_setup_engine()
+        +generate_recommendation(anomaly_data, tone) str
+    }
+    
+    class MySQLRepository {
+        -_session
+        +session «property»
+        -_setup_repository(session)
+        +get_cached_recommendation(building_id, context_hash) str
+        +save_ai_recommendation(building, hash, tone, response, source, tokens)
+    }
+    
+    class AICoach {
+        -_repo
+        -_last_source
+        -_fallback_engine
+        -_nvidia_engine
+        -_openai_engine
+        +repo «property»
+        +last_source «property»
+        -_initialize_strategies()
+        -_generate_hash(data, tone) str
+        +get_recommendation(building, anomaly_data, tone) str
+        +ask(question, tone, building) dict
+        +status() str
+    }
+
+    LLMClient <|.. OpenAIClient : implements
+    LLMClient <|.. NVIDIAClient : implements
+    LLMClient <|.. FallbackCoach : implements
+    
+    AICoach *-- FallbackCoach : strategy
+    AICoach *-- OpenAIClient : strategy
+    AICoach *-- NVIDIAClient : strategy
+    AICoach o-- MySQLRepository : persistence
+```
+
+| Class | File | Role |
+| --- | --- | --- |
+| `AICoach` | `subsystems/s3_coach/s3_ai_coach.py` | Orchestrator that checks cache, attempts live APIs, and handles fallbacks. |
+| `MySQLRepository` | `subsystems/s3_coach/s3_repository.py` | Handles database persistence and retrieves cached AI recommendations. |
+| `LLMClient` | `subsystems/s3_coach/s3_ai_coach.py` | Abstract interface defining the contract for all AI recommendation engines. |
+| `OpenAIClient` & `NVIDIAClient` | `subsystems/s3_coach/s3_ai_coach.py` | Live API strategies with secure environment key encapsulation. |
+| `FallbackCoach` | `subsystems/s3_coach/s3_ai_coach.py` | Rule-based local engine for offline or API-quota-exceeded scenarios. |
 
 ## Presentation Link
 
@@ -308,3 +381,100 @@ Errors: `{"error": {"code": "invalid_parameter", "message": "'question' must be 
 ```
 
 Error (`POST /api/coach/status`, HTTP 405): `{"error": {"code": "method_not_allowed", "message": "This address does not support that kind of request."}}`
+
+---
+
+# S3 – AI Coach, Data Persistence & Deployment
+
+Backend subsystem managing the AI recommendation engine and the primary MySQL database layer. It implements a Strategy pattern to switch between live LLMs and a local rule-based fallback, and uses SQLAlchemy for robust ORM encapsulation.
+
+## Setup
+
+Tested with Python 3.12.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Set up API keys for the AI engines
+
+```bash
+export OPENAI_API_KEY="openai-key-here"
+export NVIDIA_API_KEY="nvidia-key-here"
+```
+
+Tests (using in-memory SQLite for isolated repository testing)
+
+```bash
+pytest tests/s3/
+```
+
+### Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OPENAI_API_KEY` | none | Required for `OpenAIClient`. If missing, the orchestrator falls back to other strategies. |
+| `NVIDIA_API_KEY` | none | Required for `NVIDIAClient`. If missing, the orchestrator skips to OpenAI or Fallback. |
+| `DATABASE_URI` | `sqlite:///:memory:` | SQLAlchemy connection string. In production, this points to the S3 MySQL container. |
+
+
+## Structure
+
+```
+subsystems/
+  s3_coach/
+    __init__.py          module initialization
+    s3_models.py         SQLAlchemy declarative base, Enums, and ORM models (7 tables)
+    s3_repository.py     MySQLRepository: encapsulated database session management
+    s3_ai_coach.py       AICoach orchestrator and Strategy implementations (LLMClient)
+tests/s3/
+    test_s3_models.py    unit tests for ORM models and Enums
+    test_s3_repository.py isolated database tests using in-memory SQLite
+    test_s3_ai_coach.py  mocked tests for AI cache hits and fallback strategies
+```
+
+## Database Schema (SQLAlchemy ORM)
+
+S3 owns the relational schema. While tests run on an in-memory SQLite database, production uses MySQL 8 with InnoDB transactions. The schema enforces integrity with foreign keys and strict types.
+
+Tables managed: `buildings`, `devices`, `energy_logs`, `alerts`, `sustainability_snapshots`, `settings`, and `ai_recommendations` (used as the caching layer for AI responses to save tokens and reduce latency).
+
+## Service Integration (Internal Python API)
+
+S2 and S1 interact with S3 exclusively through the instantiated `AICoach` and `MySQLRepository` objects. The orchestrator automatically handles cache lookups, API failures, and fallbacks.
+
+```python
+class AICoach:
+    # Setup
+    repo: MySQLRepository                  # Protected via @property
+    last_source: str                       # Protected via @property ("Online", "Fallback", "Cached")
+    
+    # Core Methods
+    ask(question: str, tone: str, building_id: str) -> dict
+    # Returns: {"answer": "...", "source": "openai|nvidia|fallback|cache"}
+    
+    status() -> str
+    # Returns: "Online", "Fallback", or "Cached" based on the last interaction
+    
+    get_recommendation(building_id: str, anomaly_data: dict, tone: str="analytical") -> str
+    # Returns: the recommendation string.
+
+class MySQLRepository:
+    session: Session                       # SQLAlchemy session, protected via @property
+    
+    # AI Caching
+    get_cached_recommendation(building_id: str, context_hash: str) -> Optional[str]
+    save_ai_recommendation(building_id, context_hash, tone, response, source, tokens)
+    
+    # S1 & S2 Data Contracts
+    save_readings(readings: list) -> None
+    get_logs(start: datetime, end: datetime, category=None) -> list
+    save_alert(alert: dict) -> None
+    save_alert_limit(building_id: str, category: str, limit_kwh: float) -> None
+```
+
+## AI Caching Strategy
+
+To prevent redundant API calls, every request to the `AICoach` generates a SHA-256 hash combining the input data/question and the selected tone. If a match is found in the `ai_recommendations` table, the cached response is returned in milliseconds with `source: "cache"`.
