@@ -6,11 +6,11 @@ Group 7, Fachhochschule Dortmund. A Flask web application that monitors the ener
 
 ## Team Overview
 
-| Member | Subsystem | Folder / Module |
-| --- | --- | --- |
-| Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics.py` |
-| Abdelaziz Jail | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
-| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_coach` |
+| Member | Matriculation No. | Programme | Subsystem | Folder / Module |
+| --- | --- | --- | --- | --- |
+| Abdelhamid Ahbane | 7227265 | ESE | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics.py` |
+| Abdelaziz Jail | 7226237 | ESE | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
+| Nestor David Carrizo | 7226043 | ESE | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_coach` |
 
 ## How the data flows
 
