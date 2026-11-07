@@ -16,15 +16,39 @@ except ModuleNotFoundError as error:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import config
 
+class AnalyticsError(Exception):
+    """Base exception class for all Subsystem 1 (Analytics Engine) errors."""
+
+
+class InvalidReadingError(AnalyticsError, ValueError):
+    """Raised when an EnergyReading or timestamp fails domain validation."""
+
+
+class ThresholdConfigurationError(AnalyticsError, ValueError):
+    """Raised when an alert threshold limit or building ID is invalid."""
+
+
+class ScenarioSimulationError(AnalyticsError, TypeError, ValueError):
+    """Raised when scenario projection receives unsupported argument types."""
+
+
+class RepositoryError(AnalyticsError, sqlite3.Error):
+    """Raised when a persistence operation in SQLiteRepository fails."""
+
 
 def _parse_datetime(value: datetime | str) -> datetime:
     """Parse minute-format or standard DATETIME timestamp values."""
     if isinstance(value, datetime):
         return value
+    if not isinstance(value, str) or not value.strip():
+        raise InvalidReadingError(f"Timestamp must be a datetime or non-empty string, got: {value!r}")
     try:
         return datetime.strptime(value, "%Y-%m-%d %H:%M")
     except ValueError:
-        return datetime.fromisoformat(str(value))
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as error:
+            raise InvalidReadingError(f"Invalid datetime format: {value!r}") from error
 
 
 @dataclass
@@ -49,15 +73,15 @@ class EnergyReading:
 
     def validate(self) -> bool:
         if not isinstance(self.timestamp, datetime):
-            raise ValueError("Timestamp must be a valid datetime.")
+            raise InvalidReadingError("Timestamp must be a valid datetime.")
         if self.kwh < 0:
-            raise ValueError("Energy reading (kWh) cannot be negative.")
+            raise InvalidReadingError("Energy reading (kWh) cannot be negative.")
         if not (0.0 <= self.room_temp <= 45.0):
-            raise ValueError("Room temperature out of realistic bounds (0-45 C).")
+            raise InvalidReadingError("Room temperature out of realistic bounds (0-45 C).")
         if self.device_type not in config.DEVICES:
-            raise ValueError(f"Unknown device type: {self.device_type}")
+            raise InvalidReadingError(f"Unknown device type: {self.device_type}")
         if not isinstance(self.building_id, str) or not self.building_id.strip():
-            raise ValueError("Building ID must be a non-empty string.")
+            raise InvalidReadingError("Building ID must be a non-empty string.")
         return True
 
     def to_dict(self) -> dict:
@@ -167,8 +191,18 @@ class SQLiteRepository:
         return {device: float(limit) for device, limit in rows}
 
     def save_limit(self, building_id: str, device_type: str, limit: float) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("INSERT OR REPLACE INTO alert_thresholds VALUES (?, ?, ?)", (building_id, device_type, limit))
+        if not isinstance(building_id, str) or not building_id.strip():
+            raise ThresholdConfigurationError("Building ID must be a non-empty string.")
+        if not isinstance(limit, (int, float)) or isinstance(limit, bool) or float(limit) < 0:
+            raise ThresholdConfigurationError("Alert limit (kWh) must be a non-negative number.")
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO alert_thresholds VALUES (?, ?, ?)",
+                    (building_id, device_type, float(limit)),
+                )
+        except sqlite3.Error as error:
+            raise RepositoryError(f"Failed to save alert limit: {error}") from error
 
 
 class AlertMonitor:
@@ -364,7 +398,9 @@ class AnalyticsService:
             elif current_summary is None:
                 current_summary = self.get_dashboard_summary(building_id)
             if not isinstance(current_summary, dict):
-                raise TypeError("current_summary must be a dashboard summary dict, numeric delta, or building_id str.")
+                raise ScenarioSimulationError(
+                    "current_summary must be a dashboard summary dict, numeric delta, or building_id str."
+                )
 
             light_pct = float(light_reduction_pct or 0.0)
             before = current_summary.get("energy_today") or 15.7
