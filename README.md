@@ -376,7 +376,7 @@ classDiagram
 
 ## Presentation Link
 
-Team video (3 to 5 minutes): [Homework Assignment 1 presentation](https://drive.google.com/file/d/1tJGRWD5QOZcxYJxqm4bDNQkPmnwRuzyc/view?usp=sharing)
+Team video (3 to 5 minutes): [Homework Assignment 2 presentation](https://youtu.be/kMXvnr0ACg4)
 
 ---
 
