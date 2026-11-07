@@ -5,7 +5,7 @@ caching, and Strategy pattern fallbacks.
 """
 import json
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -13,10 +13,10 @@ from subsystems.s3_coach.s3_models import Base, AIRecommendation
 from subsystems.s3_coach.s3_repository import MySQLRepository
 from subsystems.s3_coach.s3_ai_coach import AICoach, FallbackCoach, OpenAIClient
 from subsystems.s3_coach.s3_errors import (
-    S3CoachError,
-    S3ConfigurationError,
-    S3APIError,
+    S3CoachError, S3ConfigurationError, S3APIError,
 )
+from flask import Flask
+from subsystems.s2_web.views.api import bp as s2_api_bp
 
 class TestS3Subsystem(unittest.TestCase):
     """Balanced unit and integration tests for Subsystem 3."""
@@ -29,6 +29,11 @@ class TestS3Subsystem(unittest.TestCase):
         self.session = SessionLocal()
         self.repo = MySQLRepository(self.session)
         self.coach = AICoach(self.repo)
+        # Flask test client conectado al API de S2
+        self.app = Flask(__name__)
+        self.app.register_blueprint(s2_api_bp)
+        self.app.config["TESTING"] = True
+        self.client = self.app.test_client()
 
     def tearDown(self):
         """Closes session and disposes in-memory engine after each test."""
@@ -137,6 +142,99 @@ class TestS3Subsystem(unittest.TestCase):
         tips = self.coach.tips("library")
         self.assertIsInstance(tips, list)
         self.assertEqual(len(tips), 3)
+
+    # TEST 8: Serialization & S3 Exception structure
+    def test_08_error_serialization(self):
+        """Verifies that S3 exceptions store attributes correctly for JSON serialization."""
+        err = S3ConfigurationError("Invalid configuration")
+        self.assertEqual(err.error_code, "E301_CONFIG_ERROR")
+        self.assertEqual(err.message, "Invalid configuration")
+
+    # TEST 9: Repository Data Validation (Negative Consumption)
+    def test_09_save_energy_log_rejects_negative_consumption(self):
+        """Verifies negative kWh readings raise S3ConfigurationError directly."""
+        from datetime import datetime, timezone
+        with self.assertRaises(S3ConfigurationError) as context:
+            self.repo.save_energy_log(
+                building_id="library",
+                device_id=1,
+                timestamp=datetime.now(timezone.utc),
+                consumption=-10.5,
+                co2=400.0
+            )
+        self.assertEqual(context.exception.error_code, "E301_NEGATIVE_KWH")
+
+    # TEST 10: Flask API - Missing JSON Payload (HTTP 400)
+    def test_10_flask_api_ask_missing_payload_returns_400(self):
+        """Verifies that hitting /api/coach/ask without JSON returns ApiError 400."""
+        response = self.client.post("/api/coach/ask", data="plain text not json")
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "invalid_request")
+        self.assertIn("JSON", data["error"]["message"])
+
+    # TEST 11: Flask API - Invalid Tone/Parameter (HTTP 400)
+    @patch('subsystems.s2_web.views.api.get_coach_view')
+    def test_11_flask_api_ask_invalid_parameter_returns_400(self, mock_get_coach_view):
+        """Verifies that ValueError raised by S3 is caught by S2 and returns HTTP 400."""
+        mock_coach = MagicMock()
+        mock_coach.ask.side_effect = ValueError("Unsupported tone")
+        mock_get_coach_view.return_value = mock_coach
+
+        response = self.client.post(
+            "/api/coach/ask",
+            json={"question": "Help", "tone": "sarcastic"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "invalid_parameter")
+        self.assertIn("Unsupported tone", response.get_json()["error"]["message"])
+
+    # TEST 12: Flask API - Successful Recommendation (HTTP 200)
+    @patch('subsystems.s2_web.views.api.get_coach_view')
+    def test_12_flask_api_ask_endpoint_returns_200(self, mock_get_coach_view):
+        """Verifies a successful POST to /api/coach/ask returns HTTP 200 with answer."""
+        mock_coach = MagicMock()
+        mock_coach.ask.return_value = {"answer": "Reduce peak load.", "source": "fallback"}
+        mock_get_coach_view.return_value = mock_coach
+
+        response = self.client.post(
+            "/api/coach/ask",
+            json={"question": "How to reduce peak load?", "tone": "analytical"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["answer"], "Reduce peak load.")
+        self.assertEqual(data["source"], "fallback")
+        self.assertIn("answered_at", data)
+
+    # TEST 13: Flask API - GET Status Endpoint Success (HTTP 200)
+    @patch('subsystems.s2_web.views.api.get_coach_view')
+    def test_13_flask_api_status_endpoint_returns_200(self, mock_get_coach_view):
+        """Verifies the Flask status endpoint returns 200 OK and current system status."""
+        mock_coach = MagicMock()
+        mock_coach.status.return_value = {"status": "online"}
+        mock_get_coach_view.return_value = mock_coach
+
+        response = self.client.get("/api/coach/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["status"], "online")
+        self.assertIn("checked_at", data)
+
+    # TEST 14: Fallback Coach Formatting Rules
+    def test_14_fallback_coach_tones_formatting(self):
+        """Verifies FallbackCoach outputs the correct textual tone prefixes."""
+        fallback = FallbackCoach()
+        data = {"alert_type": "HIGH_CONSUMPTION", "value_kwh": 20, "threshold_kwh": 10}
+        encouraging = fallback.generate_recommendation(data, "encouraging")
+        self.assertIn("tip", encouraging)
+        self.assertIn("Here is a quick tip", encouraging)
+
+    # TEST 15: Flask API - Unknown Route (HTTP 404)
+    def test_15_flask_api_unknown_route_returns_404(self):
+        """Verifies that requesting an unregistered Flask route returns 404 Not Found."""
+        response = self.client.get("/api/this-route-does-not-exist")
+        self.assertEqual(response.status_code, 404)
 
 if __name__ == "__main__":
     unittest.main()

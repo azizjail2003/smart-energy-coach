@@ -325,7 +325,12 @@ class AICoach:
         """
         Returns a JSON string recommendation for anomaly data (S1/S3 contract).
         """
-        context_hash = self._generate_hash(anomaly_data, tone)
+        valid_tones = ["strict", "analytical", "encouraging"]
+        clean_tone = tone.strip().lower() if tone else "analytical"
+        if clean_tone not in valid_tones:
+            raise S3ConfigurationError(f"Unsupported tone '{tone}'. Allowed tones: {valid_tones}")
+
+        context_hash = self._generate_hash(anomaly_data, clean_tone)
         cached_response = self.repo.get_cached_recommendation(building_id, context_hash)
         
         if cached_response:
@@ -336,26 +341,26 @@ class AICoach:
         source = "fallback"
         
         try:
-            response_text = self._nvidia_engine.generate_recommendation(anomaly_data, tone)
+            response_text = self._nvidia_engine.generate_recommendation(anomaly_data, clean_tone)
             source = "nvidia"
             self.last_source = "online"
         except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
             try:
-                response_text = self._openai_engine.generate_recommendation(anomaly_data, tone)
+                response_text = self._openai_engine.generate_recommendation(anomaly_data, clean_tone)
                 source = "openai"
                 self.last_source = "online"
             except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
-                response_text = self._fallback_engine.generate_recommendation(anomaly_data, tone)
+                response_text = self._fallback_engine.generate_recommendation(anomaly_data, clean_tone)
                 source = "fallback"
                 self.last_source = "fallback"
             
         self.repo.save_ai_recommendation(
             building_id=building_id,
             context_hash=context_hash,
-            tone=tone,
+            tone=clean_tone,
             response=response_text,
             source=source,
-            tokens=0
+            tokens=len(response_text.split()) if response_text else 0
         )
         
         return response_text
@@ -366,12 +371,16 @@ class AICoach:
         Checks cache first, invokes LLM/Fallback, saves to cache, and returns a dict
         containing the answer and its source.
         """
-
         if not question or not question.strip():
             raise S3ConfigurationError("Question cannot be empty.")
+            
+        valid_tones = ["strict", "analytical", "encouraging"]
+        clean_tone = tone.strip().lower() if tone else "analytical"
+        if clean_tone not in valid_tones:
+            raise S3ConfigurationError(f"Unsupported tone '{tone}'. Allowed tones: {valid_tones}")
         
         payload = {"question": question.strip(), "building_id": building_id, **building_context(building_id)}
-        context_hash = self._generate_hash(payload, tone)
+        context_hash = self._generate_hash(payload, clean_tone)
 
         # Start timing
         start_time = time.time()
@@ -390,16 +399,16 @@ class AICoach:
         source = "fallback"
         
         try:
-            response_text = self._nvidia_engine.generate_recommendation(payload, tone)
+            response_text = self._nvidia_engine.generate_recommendation(payload, clean_tone)
             source = "nvidia"
             self._last_source = "online"
         except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
             try:
-                response_text = self._openai_engine.generate_recommendation(payload, tone)
+                response_text = self._openai_engine.generate_recommendation(payload, clean_tone)
                 source = "openai"
                 self._last_source = "online"
             except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
-                response_text = self._fallback_engine.generate_recommendation(payload, tone)
+                response_text = self._fallback_engine.generate_recommendation(payload, clean_tone)
                 source = "fallback"
                 self._last_source = "fallback"
 
@@ -408,10 +417,10 @@ class AICoach:
         self.repo.save_ai_recommendation(
             building_id=building_id,
             context_hash=context_hash,
-            tone=tone,
+            tone=clean_tone,
             response=clean_answer,
             source=source,
-            tokens=0
+            tokens=len(clean_answer.split()) if clean_answer else 0
         )
 
         # Calculate final elapsed time

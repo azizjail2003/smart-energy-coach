@@ -40,8 +40,8 @@ class S3CoachError(Exception):
 class S3ConfigurationError(S3CoachError):
     """Raised when state initialization or configuration validation fails."""
 
-    def __init__(self, message: str):
-        super().__init__(message, error_code="E301_CONFIG_ERROR")
+    def __init__(self, message: str, error_code: str = "E301_CONFIG_ERROR"):
+        super().__init__(message, error_code=error_code)
 
 
 class S3APIError(S3CoachError):
@@ -56,3 +56,5 @@ class S3DatabaseError(S3CoachError):
 
     def __init__(self, message: str):
         super().__init__(message, error_code="E303_DB_ERROR")
+
+S3Error = S3CoachError
