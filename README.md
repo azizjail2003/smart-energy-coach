@@ -155,6 +155,15 @@ classDiagram
 | `AlertMonitor` | `subsystems/s1_analytics.py` | Loads per-building thresholds from storage, merges defaults, and detects device limit breaches. |
 | `EnergyReading` | `subsystems/s1_analytics.py` | Dataclass validating non-negative kWh, realistic temperature (`0–45 °C`), device category, and building ID. |
 
+| Exception Class | Inherits From | When Raised |
+| --- | --- | --- |
+| `AnalyticsError` | `Exception` | Base exception for all Subsystem 1 errors. |
+| `InvalidReadingError` | `AnalyticsError`, `ValueError` | Invalid kWh (`< 0`), temperature (`∉ [0, 45] °C`), device type, building ID, or timestamp. |
+| `ThresholdConfigurationError` | `AnalyticsError`, `ValueError` | Negative alert limit or blank building ID when saving thresholds. |
+| `ScenarioSimulationError` | `AnalyticsError`, `TypeError`, `ValueError` | Unsupported `current_summary` argument type in scenario simulation. |
+| `RepositoryError` | `AnalyticsError`, `sqlite3.Error` | SQLite persistence or connection failure in `SQLiteRepository`. |
+
+
 ---
 
 ### S3 – AI Coach, Data Persistence & Deployment
