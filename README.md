@@ -1,6 +1,6 @@
 # AI-Powered Smart Energy Management System – Homework Assignment 3
 
-Capstone Team IV, Fachhochschule Dortmund. A Flask web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach.
+Group 7, Fachhochschule Dortmund. A Flask web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach.
 
 **Homework Assignment 3: web APIs and database access.** The Flask app (S2) shows data read from the database: S1 stores the energy readings and alert limits and calculates the figures from them, and S3 stores the AI coach's answers and returns them from its cache.
 
