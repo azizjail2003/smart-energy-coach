@@ -13,6 +13,53 @@ from subsystems.s3_coach.s3_repository import MySQLRepository
 from subsystems.s3_coach.s3_errors import S3ConfigurationError, S3APIError
 import time
 
+def build_system_prompt(data: Dict[str, Any], tone: str) -> str:
+    """Chat questions are answered directly; alerts still get one tip."""
+    if data.get("question"):
+        return (
+            "You are the energy coach of a university building. "
+            f"Your tone must be {tone}. "
+            "Answer the user's question directly and briefly (at most 3 sentences), "
+            "using the building data provided (date, energy, score, devices, alerts). "
+            "If the question is not about energy or the building, say briefly what you can help with. "
+            "You must return ONLY a raw JSON object with a single key 'tip' that holds your answer."
+        )
+    return (
+        "You are an energy efficiency AI for a smart building. "
+        f"Your tone must be {tone}. "
+        "Analyze the input data and provide exactly one actionable tip. "
+        "You must return ONLY a raw JSON object with a single key 'tip'."
+    )
+
+
+def building_context(building_id: str) -> Dict[str, Any]:
+    """Today's figures from S1, so the AI can answer questions about the building."""
+    db_path = os.environ.get("S1_DB_PATH")
+    if not db_path:
+        return {}
+    try:
+        from datetime import date
+        from subsystems.s1_analytics import AnalyticsService
+        service = AnalyticsService(db_path)
+        summary = service.get_dashboard_summary(building_id)
+        week = service.compute_week_over_week(building_id)
+        alerts = service.get_alerts(building_id)[:3]
+    except Exception:
+        return {}
+    return {
+        "today": date.today().isoformat(),
+        "score": summary["score"],
+        "score_parts": {"energy": summary["E"], "carbon": summary["C"], "comfort": summary["K"]},
+        "room_temp_c": summary["room_temp"],
+        "kwh_by_device_last_hours": summary["by_device"],
+        "this_week": week["this_week"],
+        "change_vs_last_week_pct": week["change_pct"],
+        "latest_alerts": [
+            {"time": str(a["timestamp"]), "device": a["device_type"], "kwh": a["kwh"], "limit": a["limit"]}
+            for a in alerts
+        ],
+    }
+
 # --- Strategy Interface ---
 
 class LLMClient(ABC):
@@ -122,12 +169,7 @@ class OpenAIClient(LLMClient):
         if not self._client:
             raise S3ConfigurationError("OpenAI API key not configured in environment.")
             
-        system_prompt = (
-            "You are an energy efficiency AI for a smart building. "
-            f"Your tone must be {tone}. "
-            "Analyze the input data and provide exactly one actionable tip. "
-            "You must return ONLY a raw JSON object with a single key 'tip'."
-        )
+        system_prompt = build_system_prompt(anomaly_data, tone)
 
         user_message = f"Input Data: {json.dumps(anomaly_data)}"
 
@@ -160,7 +202,7 @@ class NVIDIAClient(LLMClient):
         self._api_key: Optional[str] = None
         self._client: Optional[OpenAI] = None
         self._timeout_s: float = 8.0
-        self._max_tokens: int = 100
+        self._max_tokens: int = 300
         self._setup_client()
 
     def _setup_client(self) -> None:
@@ -186,12 +228,7 @@ class NVIDIAClient(LLMClient):
         if not self._client:
             raise S3ConfigurationError("NVIDIA API key not configured in environment.")
             
-        system_prompt = (
-            "You are an energy efficiency AI for a smart building. "
-            f"Your tone must be {tone}. "
-            "Analyze the input data and provide exactly one actionable tip. "
-            "You must return ONLY a raw JSON object with a single key 'tip'."
-        )
+        system_prompt = build_system_prompt(anomaly_data, tone)
 
         user_message = f"Input Data: {json.dumps(anomaly_data)}"
 
@@ -333,7 +370,7 @@ class AICoach:
         if not question or not question.strip():
             raise S3ConfigurationError("Question cannot be empty.")
         
-        payload = {"question": question.strip(), "building_id": building_id}
+        payload = {"question": question.strip(), "building_id": building_id, **building_context(building_id)}
         context_hash = self._generate_hash(payload, tone)
 
         # Start timing
