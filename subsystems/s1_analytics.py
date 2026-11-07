@@ -391,3 +391,46 @@ class AnalyticsService:
                 "before_score": current_summary.get("score", 80),
                 "after_score": score,
             }
+
+    # --- Event-Driven Stream Processing Integration ---
+
+    def build_stream_pipeline(self, min_kwh_threshold: float = 0.05):
+        """
+        Composes and returns InactiveMeterFilter | CarbonAndComfortTransformer | LoadBalanceAndTariffTransformer.
+        """
+        from subsystems.s1_stream import build_default_pipeline
+
+        return build_default_pipeline(
+            calculator=self.calculator,
+            alert_monitor=self.alert_monitor,
+            min_kwh_threshold=min_kwh_threshold,
+        )
+
+    def stream_live_readings(
+        self,
+        building_id: str = config.DEFAULT_BUILDING_ID,
+        max_events: int = 4,
+        min_kwh_threshold: float = 0.05,
+        persist: bool = True,
+    ) -> list[dict]:
+        """
+        Instantiates MeterReadingStream, binds it to the stream pipeline,
+        optionally persists via self.save_reading(event), and returns serialized dicts.
+        """
+        from subsystems.s1_stream import MeterReadingStream
+
+        stream = MeterReadingStream(
+            simulator=self.simulator,
+            building_id=building_id,
+            max_events=max_events,
+        )
+        pipeline = self.build_stream_pipeline(min_kwh_threshold=min_kwh_threshold)
+        bound_pipeline = pipeline.bind(stream)
+
+        surviving_events = []
+        for event in bound_pipeline:
+            if persist:
+                self.save_reading(event)
+            surviving_events.append(event)
+
+        return [event.to_dict() for event in surviving_events]
