@@ -6,9 +6,9 @@ Group 7, Fachhochschule Dortmund. A web application that monitors the energy use
 
 | Member | Subsystem | Folder / Module |
 | --- | --- | --- |
-| Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics.py` |
+| Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics.py`, `subsystems/s1_stream.py` |
 | Abdelaziz Jail | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
-| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_ai_data` |
+| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_coach` |
 
 ## System Design
 
@@ -106,6 +106,8 @@ classDiagram
         +get_alerts(building_id: str, limits: dict, recent_rows: list) list~dict~
         +simulate_scenario(current_summary: dict, heating_delta_c: float, light_reduction_pct: float, building_id: str) dict
         +estimate_scenario(changes: dict, building_id: str) dict
+        +build_stream_pipeline(min_kwh_threshold: float) StreamPipeline
+        +stream_live_readings(building_id: str, max_events: int, min_kwh_threshold: float, persist: bool) list~dict~
     }
 
     class EnergySimulator {
@@ -178,57 +180,203 @@ classDiagram
 | `AlertMonitor` | `subsystems/s1_analytics.py` | Loads per-building thresholds from storage, merges defaults, and detects device limit breaches. |
 | `EnergyReading` | `subsystems/s1_analytics.py` | Dataclass validating non-negative kWh, realistic temperature (`0–45 °C`), device category, and building ID. |
 
----
+#### S1 Event-Driven Stream Processing Framework (`subsystems/s1_stream.py` – Homework Assignment 2)
 
+Seven collaborating classes implementing the high-frequency (5-second) IoT smart meter stream processing framework using Abstract Base Classes (`ABC`), Inheritance & Polymorphism, Operator Overloading (`|` and `+`), and Iterators & Generators (`__iter__`, `__next__`, `yield`).
+
+```mermaid
+classDiagram
+    direction TB
+
+    class EnergyReading {
+        <<dataclass>>
+        +datetime timestamp
+        +str device_type
+        +float kwh
+        +float room_temp
+        +float co2_kg
+        +int sustainability_score
+        +str building_id
+        +validate() bool
+        +to_dict() dict
+    }
+
+    class StreamEnergyReading {
+        <<dataclass>>
+        +float comfort_index
+        +float cost_eur
+        +bool is_peak_tariff
+        +float building_load_balance_kwh
+        +float device_load_share_pct
+        +bool alert_triggered
+        +from_reading(reading: EnergyReading)$ StreamEnergyReading
+    }
+
+    class MeterReadingStream {
+        <<Iterator>>
+        +EnergySimulator simulator
+        +str building_id
+        +datetime current_time
+        +int interval_seconds
+        +int max_events
+        +float inactive_probability
+        +__iter__() MeterReadingStream
+        +__next__() StreamEnergyReading
+    }
+
+    class StreamProcessor {
+        <<abstract>>
+        +process_event(event: EnergyReading)* StreamEnergyReading
+        +process_stream(stream: Iterable) Iterator~StreamEnergyReading~
+        +__or__(other: StreamProcessor) StreamPipeline
+        +__add__(other: StreamProcessor) StreamPipeline
+    }
+
+    class StreamPipeline {
+        <<Iterator>>
+        +list~StreamProcessor~ steps
+        +process_event(event: EnergyReading) StreamEnergyReading
+        +bind(source: Iterable) StreamPipeline
+        +__iter__() StreamPipeline
+        +__next__() StreamEnergyReading
+    }
+
+    class InactiveMeterFilter {
+        +float min_kwh_threshold
+        +set~str~ allowed_devices
+        +process_event(event: EnergyReading) StreamEnergyReading
+    }
+
+    class CarbonAndComfortTransformer {
+        +ScoreCalculator calculator
+        +process_event(event: EnergyReading) StreamEnergyReading
+    }
+
+    class LoadBalanceAndTariffTransformer {
+        +ScoreCalculator calculator
+        +AlertMonitor alert_monitor
+        +tuple~int, int~ peak_hours
+        +float peak_tariff_multiplier
+        +dict building_loads
+        +dict device_loads
+        +reset_balances() None
+        +process_event(event: EnergyReading) StreamEnergyReading
+    }
+
+    EnergyReading <|-- StreamEnergyReading : inherits
+    MeterReadingStream ..> StreamEnergyReading : emits every 5s
+    StreamProcessor <|-- StreamPipeline : inherits
+    StreamProcessor <|-- InactiveMeterFilter : inherits
+    StreamProcessor <|-- CarbonAndComfortTransformer : inherits
+    StreamProcessor <|-- LoadBalanceAndTariffTransformer : inherits
+    StreamPipeline o-- "*" StreamProcessor : chains via | and +
+```
+
+---
 ### S3 – AI Coach, Data Persistence & Deployment
 
-Added by the S3 owner.
+Six main classes. `AICoach` is the central orchestrator that S1 and S2 interact with; it manages caching via `MySQLRepository` and delegates generation to a strategy interface (`LLMClient`) implemented by `OpenAIClient`, `NVIDIAClient`, and `FallbackCoach`. Domain errors are handled through the `S3CoachError` exception hierarchy. Every private attribute uses `@property` getters and setters for state initialization and encapsulation.
+
+```mermaid
+classDiagram
+    direction LR
+    
+    class LLMClient {
+        <<Interface>>
+        +generate_recommendation(payload, tone) str
+    }
+    
+    class OpenAIClient {
+        -_api_key
+        -_client
+        +api_key «property»
+        -_setup_client()
+        +generate_recommendation(payload, tone) str
+    }
+    
+    class NVIDIAClient {
+        -_api_key
+        -_client
+        +api_key «property»
+        -_setup_client()
+        +generate_recommendation(payload, tone) str
+    }
+    
+    class FallbackCoach {
+        -_engine_name
+        +engine_name «property»
+        -_setup_engine()
+        +generate_recommendation(payload, tone) str
+    }
+    
+    class MySQLRepository {
+        -_session
+        +session «property»
+        -_setup_repository(session)
+        +get_limits(building_id) dict
+        +save_limits(building_id, limits)
+        +save_energy_log(building_id, device_id, timestamp, consumption, co2, temp, comfort)
+        +save_alert(building_id, timestamp, alert_type, message, threshold, value)
+        +get_cached_recommendation(building_id, context_hash) str
+        +save_ai_recommendation(building_id, context_hash, tone, response, source, tokens)
+    }
+    
+    class AICoach {
+        -_repo
+        -_last_source
+        -_fallback_engine
+        -_nvidia_engine
+        -_openai_engine
+        +repo «property»
+        +last_source «property»
+        -_initialize_strategies()
+        -_generate_hash(payload, tone) str
+        +get_recommendation(building_id, payload, tone) str
+        +ask(question, tone, building_id) dict
+        +status() str
+        +tips(building_id) list
+    }
+
+    class S3ConfigurationError {
+        <<Exception>>
+    }
+    
+    class S3DatabaseError {
+        <<Exception>>
+    }
+
+    class S3APIError {
+        <<Exception>>
+    }
+
+    LLMClient <|.. OpenAIClient : implements
+    LLMClient <|.. NVIDIAClient : implements
+    LLMClient <|.. FallbackCoach : implements
+    
+    AICoach *-- FallbackCoach : strategy
+    AICoach *-- OpenAIClient : strategy
+    AICoach *-- NVIDIAClient : strategy
+    AICoach o-- MySQLRepository : persistence
+    
+    AICoach ..> S3ConfigurationError : raises
+    AICoach ..> S3APIError : catches
+    MySQLRepository ..> S3DatabaseError : raises
+    MySQLRepository ..> S3ConfigurationError : raises
+```
+
+| Class | File | Role |
+| --- | --- | --- |
+| `AICoach` | `subsystems/s3_coach/s3_ai_coach.py` | Orchestrator that checks cache, attempts live APIs, and handles fallbacks. |
+| `MySQLRepository` | `subsystems/s3_coach/s3_repository.py` | Handles database persistence and retrieves cached AI recommendations. |
+| `LLMClient` | `subsystems/s3_coach/s3_ai_coach.py` | Abstract interface defining the contract for all AI recommendation engines. |
+| `OpenAIClient` & `NVIDIAClient` | `subsystems/s3_coach/s3_ai_coach.py` | Live API strategies with secure environment key encapsulation. |
+| `FallbackCoach` | `subsystems/s3_coach/s3_ai_coach.py` | Rule-based local engine for offline or API-error scenarios. |
+| `S3CoachError` | `subsystems/s3_coach/s3_errors.py` | Custom exception hierarchy (`S3ConfigurationError`, `S3APIError`, `S3DatabaseError`). |
+| `AIRecommendation` | `subsystems/s3_coach/s3_models.py` | SQLAlchemy ORM model for the `ai_recommendations` caching table. |
 
 ## Presentation Link
 
-Team video (3 to 5 minutes): _link to be added after recording_.
-
----
-
-# S1 – Monitoring, Simulation & Analytics Engine
-
-**Owner:** Abdelhamid Ahbane  
-**Implementation:** `subsystems/s1_analytics.py` | **Shared Config:** `config.py` | **Test Suite:** `tests/test_s1_analytics.py`  
-**Detailed Handoff Docs:** `docs/handoffs_s1/STAGE_1_HANDOFF.md` – `STAGE_5_FINAL_MASTER_HANDOFF.md`
-
-## Core Capabilities & Formulas
-
-* **Supported Buildings:** `library` (default), `lecture-hall-a`, and `lab-building`
-* **Device Categories:** `Heating` (`1.4 kWh` base), `Servers` (`1.1 kWh` base), `Lighting` (`0.5 kWh` base), `Other` (`0.3 kWh` base)
-* **Mathematical Engine (`ScoreCalculator`):**
-  * **CO₂ Emissions:** `round(kWh × 0.38, 2)` kg
-  * **Energy Cost:** `round(kWh × 0.35, 2)` EUR
-  * **Comfort Index (`K`):** `round(max(0.0, min(1.0, 1.0 - (|room_temp - 21.0| / 10.0))), 2)`
-  * **Sustainability Score:** `round(100 × (0.40 × E + 0.35 × C + 0.25 × K))` where `E = 1.0 - (hourly_kwh / 4.0)` and `C = 1.0 - ((hourly_kwh × 0.38) / 1.6)`
-* **Deterministic Simulation & Seeding:** Uses an isolated `random.Random(42)` instance with occupancy multipliers (`1.4×` from `08:00–18:00`, `0.6×` off-peak) to seed 14 days of hourly history (`1,344` rows per building) in a single batch transaction (`< 0.05 s`). All returned timestamps are Python `datetime` objects.
-* **What-If Scenario Projection (`simulate_scenario` & `estimate_scenario`):** Models heating setpoint changes (`6%` heating delta per `1.0 °C`) and lighting reductions (`0–50%`) without mutating database records.
-
-## S1 Requirements Traceability Matrix
-
-| ID | Requirement Summary | Implemented By | Automated Proof (`tests/test_s1_analytics.py`) |
-| :--- | :--- | :--- | :--- |
-| **FR1** | Generate realistic device energy readings | `EnergySimulator.generate_reading()`, `simulate_live_step()` | `test_single_calculation_performance_under_50ms`, `test_live_step_and_alert_fallback_safety` |
-| **FR2** | Seed 14-day hourly historical dataset (1,344 rows) | `EnergySimulator.seed_history()`, `seed_if_empty()` | `test_seed_and_summary_with_temp_db`, `test_fixed_seed_determinism` |
-| **FR3** | Calculate CO₂ emissions and EUR cost | `ScoreCalculator.calc_co2()`, `calc_cost()` | `test_co2_and_cost_calculation` |
-| **FR4** | Calculate indoor thermal comfort index | `ScoreCalculator.calc_comfort()` | `test_comfort_score_at_ideal_temp` |
-| **FR5** | Calculate weighted sustainability score (0–100) | `ScoreCalculator.calc_sustainability_score()` | `test_comfort_score_at_ideal_temp` |
-| **FR6** | Produce unified dashboard KPIs & view model | `AnalyticsService.get_dashboard_summary()`, `get_score()` | `test_seed_and_summary_with_temp_db`, `test_score_alerts_and_scenario_api` |
-| **FR7** | Detect threshold alerts & compute aggregations/WoW | `AlertMonitor.check_alerts()`, `get_alerts()`, `get_aggregates()`, `compute_week_over_week()` | `test_week_over_week_and_time_aggregations`, `test_alert_monitor_loads_building_limits`, `test_score_alerts_and_scenario_api` |
-| **FR8** | Calculate financial & carbon savings vs. baseline | `AnalyticsService.get_dashboard_summary()` | `test_seed_and_summary_with_temp_db` |
-| **FR9** | Project non-destructive What-If scenarios | `AnalyticsService.simulate_scenario()`, `estimate_scenario()` | `test_scenario_reduces_energy_when_heating_lowered`, `test_uml_method_signature_compatibility`, `test_score_alerts_and_scenario_api` |
-| **FR10** | Validate and persist readings per building | `EnergyReading.validate()`, `save_reading()` | `test_reading_validation_rejects_negative_kwh`, `test_building_isolation` |
-| **NFR1–10** | `< 50 ms` calc, determinism (`seed=42`), modular facade, type safety, safe fallbacks | `s1_analytics.py` & `config.py` | Full 14-test suite in `tests/test_s1_analytics.py`, including `test_returned_timestamps_are_datetime_objects` |
-
-Run the Subsystem 1 test suite:
-
-```bash
-python -m pytest tests/test_s1_analytics.py -v
-```
+Team video (3 to 5 minutes): [Homework Assignment 1 presentation](https://drive.google.com/file/d/1tJGRWD5QOZcxYJxqm4bDNQkPmnwRuzyc/view?usp=sharing)
 
 ---
 
@@ -262,7 +410,7 @@ gunicorn -w 2 -b 127.0.0.1:8000 wsgi:app
 Tests:
 
 ```bash
-python -m pytest
+pytest
 ```
 
 ### Configuration
@@ -301,24 +449,6 @@ wsgi.py                entry point for flask run and Gunicorn
 ```
 
 Pages: Dashboard `/`, History & Alerts `/history`, Scenarios `/scenarios`, AI Coach `/coach`, Settings `/settings`. Every page accepts `?building=`; the choice is kept in the session.
-
-### Click path
-
-Every page is one click away in the navigation rail on the left, and every feature is reached in at most two clicks from the dashboard, within the limit of three (S2-NFR2). Typing in a field is not counted as a click. Start the app, open `http://127.0.0.1:5000/` and follow these steps:
-
-| Feature | Clicks from the dashboard | What you should see |
-|---|---|---|
-| Today's figures, score gauge and alert banner | 0 | Four KPI cards (15.7 kWh, 6.0 kg CO₂, €5.50, €0.35 saved, €2.35 this week), the score gauge at 82 in the green band, and the banner "Heating is above the limit at 13:00." |
-| Explain a metric | 1: the ⓘ next to Sustainability Score, Energy (E), Carbon (C), Comfort (K) or CO₂ today | A tooltip with the formula behind the number |
-| Filter by device type | 1: the Heating chip | The cards, trend lines and hourly chart switch to heating only (7.5 kWh) |
-| Compare with last week | 1: untick "Compare with last week" | The dashed last-week line disappears from the hourly chart |
-| Switch building | 2: building menu at the top, then Lab Building | Every figure changes to the Lab Building demo data |
-| Daily use by device type | 2: History & Alerts, then Last 7 days | Stacked bars per day; hovering a bar shows each device type and the day's total |
-| Alerts and week-over-week table | 1: History & Alerts | Three alerts (latest first) and last week vs this week (109.9 → 103.3 kWh) |
-| What-if scenario | 2: Scenarios, then Calculate scenario after typing −1 and 20 | Before/after: 15.7 → 14.6 kWh, score 82 → 87 |
-| Ask the AI coach | 2: AI Coach, then Send after typing a question | The answer as plain text with its source and response time |
-| Change alert limits | 2: Settings, then Save limits after setting Lighting to 0.2 | "Limits saved for this session."; back on the dashboard the banner lists the new alerts within 10 s |
-| Theme | 1: the theme button in the rail | System → Dark → Light |
 
 ## Mock data
 
@@ -382,26 +512,21 @@ Parameters: `building` (required), `category` (optional). Savings stay building-
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "date": "2024-05-14", "category": "heating",
  "kpis": {
    "energy": {"value": 7.5, "unit": "kWh", "display": "7.5", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
-   "co2": {"value": 2.9, "unit": "kg", "display": "2.9", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week", "help": "Energy use × 0.38 kg CO₂ per kWh, …"},
+   "co2": {"value": 2.9, "unit": "kg", "display": "2.9", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
    "cost": {"value": 2.62, "unit": "EUR", "display": "€2.62", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
-   "savings": {"value": 0.35, "unit": "EUR", "display": "€0.35", "co2_kg": 1.0, "co2_display": "1.0", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs normal use", "negative": false, "scope": "building",
-               "week": {"eur": 2.35, "co2_kg": 2.5, "display": "€2.35", "co2_display": "2.5", "negative": false}}}}
+   "savings": {"value": 0.35, "unit": "EUR", "display": "€0.35", "co2_kg": 1.0, "co2_display": "1.0", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs normal use", "scope": "building"}}}
 ```
-
-`savings.week` is this week against last week, from the week comparison. `negative` is `true` when more was used than the baseline; the page then shows the value in red. Every card also carries a `spark` trend line (left out above).
 
 Error (`GET /api/kpis`): `{"error": {"code": "missing_parameter", "message": "'building' is required."}}`
 
 ### GET /api/score
 
-Parameters: `building` (required). Simulated live reading with one decimal; `reference_score` is the whole-number report value. `band` is the gauge colour (`red` below 60, `amber` 60–80, `green` above 80) and `needle_deg` the needle angle from −90 (0) to 90 (100). `help` holds the tooltip text.
+Parameters: `building` (required). Simulated live reading with one decimal; `reference_score` is the whole-number report value.
 
 ```json
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "label": "Building score", "scope": "building",
  "score": 82.1, "display": "82.1", "reference_score": 82, "target": 90,
- "band": {"band": "green", "label": "Good", "needle_deg": 57.8}, "reference_band": {"band": "green", "label": "Good", "needle_deg": 57.6},
- "help": "Weighted mix of energy, carbon and comfort, from 0 to 100. Red below 60, amber 60 to 80, green above 80.",
- "components": {"energy": {"value": 0.86, "display": "0.86", "weight": 0.4, "help": "E, weight 0.40: …"}, "carbon": {"value": 0.81, "display": "0.81", "weight": 0.35, "help": "C, weight 0.35: …"}, "comfort": {"value": 0.78, "display": "0.78", "weight": 0.25, "help": "K, weight 0.25: …"}},
+ "components": {"energy": {"value": 0.86, "display": "0.86", "weight": 0.4}, "carbon": {"value": 0.81, "display": "0.81", "weight": 0.35}, "comfort": {"value": 0.78, "display": "0.78", "weight": 0.25}},
  "formula": "Score = 100 × (0.40·E + 0.35·C + 0.25·K)", "measured_at": "2026-10-21T00:12:18+02:00", "time_display": "00:12:18"}
 ```
 
@@ -423,7 +548,7 @@ Error (`?building=library&day=14.05.2024`): `{"error": {"code": "invalid_paramet
 
 ### GET /api/aggregates
 
-Parameters: `building` (required), `period` (default `week`). `daily_chart` is `null` for `today`; otherwise it is a stacked bar chart with one dataset per device type and the day `totals`.
+Parameters: `building` (required), `period` (default `week`). `daily_chart` is `null` for `today`.
 
 ```json
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "period": "week", "start": "2024-05-08", "end": "2024-05-14",
@@ -432,23 +557,20 @@ Parameters: `building` (required), `period` (default `week`). `daily_chart` is `
                 {"id": "servers", "label": "Servers", "kwh": 22.7, "share_pct": 22}, {"id": "other", "label": "Other", "kwh": 10.3, "share_pct": 10}],
  "chart": {"type": "bar", "labels": ["Heating", "Lighting", "Servers", "Other"], "categories": ["heating", "lighting", "servers", "other"],
            "datasets": [{"key": "share", "label": "Share of total", "data": [48, 20, 22, 10]}], "unit": "%", "…": "…"},
- "daily_chart": {"type": "bar", "stacked": true, "labels": ["Wed 8 May", "…"], "categories": ["heating", "lighting", "servers", "other"],
-                 "datasets": [{"key": "heating", "label": "Heating", "data": [7.63, "…"]}, "…"], "totals": [15.9, "…"], "unit": "kWh", "…": "…"}}
+ "daily_chart": {"type": "bar", "labels": ["Wed 8 May", "…"], "datasets": [{"key": "primary", "label": "Energy use", "data": [15.9, "…"]}], "unit": "kWh", "…": "…"}}
 ```
 
 Error (`?building=library&period=year`): `{"error": {"code": "invalid_parameter", "message": "'period' must be one of: today, week, 7d, 30d."}}`
 
 ### GET /api/alerts
 
-Parameters: `building` (required). Readings above the session's limits, latest first, at most 10. `banner` lists today's alerts for the dashboard (`null` when there are none); the dashboard requests it every 10 s and uses `key` to tell a new alert from one already dismissed.
+Parameters: `building` (required). Readings above the session's limits, latest first, at most 10.
 
 ```json
 {"building": {"id": "library", "name": "Library", "data": "reference"}, "unit": "kWh",
  "limits_kwh": {"heating": 2.0, "lighting": 0.8, "servers": 3.5, "other": 1.0},
  "alerts": [{"time": "2024-05-14T13:00:00+02:00", "time_label": "Today 13:00", "category": "heating", "category_label": "Heating",
-             "value_kwh": 2.4, "limit_kwh": 2.0, "value_display": "2.4 kWh", "limit_display": "2.0 kWh", "message": "Heating above limit: 2.4 kWh"}],
- "banner": {"key": "2024-05-14T13:00:00+02:00/heating", "title": "Heating is above the limit at 13:00.",
-            "text": "The heating load (2.4 kWh) exceeds the defined limit of 2.0 kWh.", "lines": []}}
+             "value_kwh": 2.4, "limit_kwh": 2.0, "value_display": "2.4 kWh", "limit_display": "2.0 kWh", "message": "Heating above limit: 2.4 kWh"}]}
 ```
 
 Error (`GET /api/alerts`): `{"error": {"code": "missing_parameter", "message": "'building' is required."}}`
@@ -472,3 +594,146 @@ Errors: `{"error": {"code": "invalid_parameter", "message": "'question' must be 
 ```
 
 Error (`POST /api/coach/status`, HTTP 405): `{"error": {"code": "method_not_allowed", "message": "This address does not support that kind of request."}}`
+
+---
+
+
+
+# S3 – AI Coach, Data Persistence & Deployment
+
+Backend subsystem managing the AI recommendation engine and the primary MySQL database layer. It implements a Strategy pattern to switch between live LLMs and a local rule-based fallback, and uses SQLAlchemy for robust ORM encapsulation.
+
+## Setup
+
+Tested with Python 3.12.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Set up API keys for the AI engines
+
+```bash
+export OPENAI_API_KEY="openai-key-here"
+export NVIDIA_API_KEY="nvidia-key-here"
+```
+
+Tests (using in-memory SQLite for isolated repository testing)
+
+```bash
+pytest tests/s3/
+```
+
+### Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OPENAI_API_KEY` | none | Required for `OpenAIClient`. If missing, the orchestrator falls back to other strategies. |
+| `NVIDIA_API_KEY` | none | Required for `NVIDIAClient`. If missing, the orchestrator skips to OpenAI or Fallback. |
+| `DATABASE_URI` | `sqlite:///:memory:` | SQLAlchemy connection string. In production, this points to the S3 MySQL container. |
+
+
+## Structure
+
+```
+subsystems/
+  s3_coach/
+    __init__.py          module initialization
+    s3_models.py         SQLAlchemy declarative base, Enums, and ORM models (7 tables)
+    s3_repository.py     MySQLRepository: encapsulated database session management
+    s3_ai_coach.py       AICoach orchestrator and Strategy implementations (LLMClient)
+    s3_errors.py         Custom OOP exception hierarchy (S3CoachError, S3ConfigurationError, etc.)
+tests/s3/                Unified test suite covering models, repository, coach, and error handling
+```
+
+## Database Schema (SQLAlchemy ORM)
+
+S3 owns the relational schema. While tests run on an in-memory SQLite database, production uses MySQL 8 with InnoDB transactions. The schema enforces integrity with foreign keys and strict types.
+
+Tables managed: `buildings`, `devices`, `energy_logs`, `alerts`, `sustainability_snapshots`, `settings`, and `ai_recommendations` (used as the caching layer for AI responses to save tokens and reduce latency).
+
+## Service Integration (Internal Python API)
+
+S2 and S1 interact with S3 exclusively through the instantiated `AICoach` and `MySQLRepository` objects. The orchestrator automatically handles cache lookups, API failures, and fallbacks, raising custom `S3CoachError` exceptions if invalid states are injected.
+
+```python
+class AICoach:
+    # Setup
+    repo: MySQLRepository                  # Protected via @property
+    last_source: str                       # Protected via @property ("Online", "Fallback", "Cached")
+    
+    # Core Methods
+    ask(question: str, tone: str, building_id: str) -> dict
+    # Returns: {"answer": "...", "source": "openai|nvidia|fallback|cache"}
+    
+    status() -> str
+    # Returns: "Online", "Fallback", or "Cached" based on the last interaction
+    
+    get_recommendation(building_id: str, anomaly_data: dict, tone: str="analytical") -> str
+    # Returns: the recommendation string (JSON format).
+
+    tips(building_id: str) -> list
+    # Returns: A list of actionable daily energy tips for the S2 Dashboard.
+
+class MySQLRepository:
+    session: Session                       # SQLAlchemy session, protected via @property
+    
+    # AI Caching
+    get_cached_recommendation(building_id: str, context_hash: str) -> Optional[str]
+    save_ai_recommendation(building_id, context_hash, tone, response, source, tokens)
+    
+    # S1 & S2 Data Contracts
+    get_limits(building_id: str) -> dict
+    save_limits(building_id: str, limits: dict) -> None
+    save_energy_log(building_id: str, device_id: int, timestamp: datetime, consumption: float, co2: float, temp: float, comfort: float) -> None
+    save_alert(building_id: str, timestamp: datetime, alert_type: str, message: str, threshold: float, value: float) -> None
+```
+
+## AI Caching Strategy
+
+To prevent redundant API calls, every request to the `AICoach` generates a SHA-256 hash combining the input data/question and the selected tone. If a match is found in the `ai_recommendations` table, the cached response is returned in milliseconds with `source: "cache"`.
+
+---
+# S1 – Monitoring, Simulation & Analytics Engine
+
+**Owner:** Abdelhamid Ahbane  
+**Implementation:** `subsystems/s1_analytics.py`, `subsystems/s1_stream.py` | **Shared Config:** `config.py` | **Test Suite:** `tests/test_s1_analytics.py`, `tests/test_s1_stream.py`  
+**Detailed Handoff Docs:** `docs/handoffs_s1/STAGE_1_HANDOFF.md` – `STAGE_5_FINAL_MASTER_HANDOFF.md`
+
+## Core Capabilities & Formulas
+
+* **Supported Buildings:** `library` (default), `lecture-hall-a`, and `lab-building`
+* **Device Categories:** `Heating` (`1.4 kWh` base), `Servers` (`1.1 kWh` base), `Lighting` (`0.5 kWh` base), `Other` (`0.3 kWh` base)
+* **Mathematical Engine (`ScoreCalculator`):**
+  * **CO₂ Emissions:** `round(kWh × 0.38, 2)` kg
+  * **Energy Cost:** `round(kWh × 0.35, 2)` EUR
+  * **Comfort Index (`K`):** `round(max(0.0, min(1.0, 1.0 - (|room_temp - 21.0| / 10.0))), 2)`
+  * **Sustainability Score:** `round(100 × (0.40 × E + 0.35 × C + 0.25 × K))` where `E = 1.0 - (hourly_kwh / 4.0)` and `C = 1.0 - ((hourly_kwh × 0.38) / 1.6)`
+* **Deterministic Simulation & Seeding:** Uses an isolated `random.Random(42)` instance with occupancy multipliers (`1.4×` from `08:00–18:00`, `0.6×` off-peak) to seed 14 days of hourly history (`1,344` rows per building) in a single batch transaction (`< 0.05 s`). All returned timestamps are Python `datetime` objects.
+* **What-If Scenario Projection (`simulate_scenario` & `estimate_scenario`):** Models heating setpoint changes (`6%` heating delta per `1.0 °C`) and lighting reductions (`0–50%`) without mutating database records.
+
+## S1 Requirements Traceability Matrix
+
+| ID | Requirement Summary | Implemented By | Automated Proof (`tests/test_s1_analytics.py`) |
+| :--- | :--- | :--- | :--- |
+| **FR1** | Generate realistic device energy readings | `EnergySimulator.generate_reading()`, `simulate_live_step()` | `test_single_calculation_performance_under_50ms`, `test_live_step_and_alert_fallback_safety` |
+| **FR2** | Seed 14-day hourly historical dataset (1,344 rows) | `EnergySimulator.seed_history()`, `seed_if_empty()` | `test_seed_and_summary_with_temp_db`, `test_fixed_seed_determinism` |
+| **FR3** | Calculate CO₂ emissions and EUR cost | `ScoreCalculator.calc_co2()`, `calc_cost()` | `test_co2_and_cost_calculation` |
+| **FR4** | Calculate indoor thermal comfort index | `ScoreCalculator.calc_comfort()` | `test_comfort_score_at_ideal_temp` |
+| **FR5** | Calculate weighted sustainability score (0–100) | `ScoreCalculator.calc_sustainability_score()` | `test_comfort_score_at_ideal_temp` |
+| **FR6** | Produce unified dashboard KPIs & view model | `AnalyticsService.get_dashboard_summary()`, `get_score()` | `test_seed_and_summary_with_temp_db`, `test_score_alerts_and_scenario_api` |
+| **FR7** | Detect threshold alerts & compute aggregations/WoW | `AlertMonitor.check_alerts()`, `get_alerts()`, `get_aggregates()`, `compute_week_over_week()` | `test_week_over_week_and_time_aggregations`, `test_alert_monitor_loads_building_limits`, `test_score_alerts_and_scenario_api` |
+| **FR8** | Calculate financial & carbon savings vs. baseline | `AnalyticsService.get_dashboard_summary()` | `test_seed_and_summary_with_temp_db` |
+| **FR9** | Project non-destructive What-If scenarios | `AnalyticsService.simulate_scenario()`, `estimate_scenario()` | `test_scenario_reduces_energy_when_heating_lowered`, `test_uml_method_signature_compatibility`, `test_score_alerts_and_scenario_api` |
+| **FR10** | Validate and persist readings per building | `EnergyReading.validate()`, `save_reading()` | `test_reading_validation_rejects_negative_kwh`, `test_building_isolation` |
+| **NFR1–10** | `< 50 ms` calc, determinism (`seed=42`), modular facade, type safety, safe fallbacks | `s1_analytics.py` & `config.py` | Full 14-test suite in `tests/test_s1_analytics.py`, including `test_returned_timestamps_are_datetime_objects` |
+
+Run the Subsystem 1 test suite:
+
+```bash
+python -m pytest tests/test_s1_analytics.py tests/test_s1_stream.py -v
+```
+
+---
