@@ -166,10 +166,6 @@ classDiagram
 
 ---
 
-### S3 – AI Coach, Data Persistence & Deployment
-
-Added by the S3 owner.
-
 ## Tests
 
 The 15 error-handling tests for S2 are in `tests/s2/test_errors.py`. Each test checks one case: the class hierarchy, 400 for bad input and an expired form, 404, 405, 500 without details, and 503 when S1 or S3 is down.
@@ -183,7 +179,8 @@ pip install -r requirements.txt
 pytest tests/s2/test_errors.py -v
 ```
 
-## Presentation Link
+## Presentation 
+https://drive.google.com/file/d/1G8hfVQlEG_Auu_9NAmw64GoZx8LJ-52z/view?usp=sharing
 
 Team video (3 to 5 minutes): _link to be added after recording_.
 
