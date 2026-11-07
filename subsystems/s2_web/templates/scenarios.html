@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, trend, field_error, described_by %}
+
+{% block title %}Scenarios{% endblock %}
+{% block heading %}Scenarios{% endblock %}
+
+{% macro scenario_field(field, icon_name, hint, attrs) -%}
+<div class="field{{ ' has-error' if field.errors }}">
+  <label class="field__label" for="{{ field.id }}">{{ icon(icon_name, 24) }}{{ field.label.text }}</label>
+  {% set options = dict(attrs) %}
+  {% set _ = options.update({"aria-describedby": described_by(field) | trim, "aria-invalid": "true" if field.errors else "false"}) %}
+  {{ field(class="input", type="number", **options) }}
+  <p class="field__hint" id="{{ field.id }}-hint">{{ hint }}</p>
+  {{ field_error(field) }}
+</div>
+{%- endmacro %}
+
+{% block content %}
+<div class="two-col two-col--scenario">
+  <section class="card" aria-labelledby="adjust-title">
+    <h2 class="card__title" id="adjust-title">{{ icon("sliders", 24) }}Adjust settings</h2>
+    <p class="card__intro">Explore how changes to heating and lighting affect energy use, costs and emissions. Enter your values and calculate the estimated impact.</p>
+    <form method="post" action="{{ url_for('pages.scenarios', building=building) }}" novalidate>
+      {{ form.csrf_token }}
+      {{ scenario_field(form.heating_change, "thermometer", "Range: −3 to +3 °C (step 0.5)", {"min": -3, "max": 3, "step": 0.5}) }}
+      {{ scenario_field(form.lighting_reduction, "bulb", "Range: 0 to 50% (step 5)", {"min": 0, "max": 50, "step": 5}) }}
+      <button class="button button--primary button--wide" type="submit">Calculate scenario {{ icon("arrow-right", 18) }}</button>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="impact-title">
+    <h2 class="card__title" id="impact-title">{{ icon("bars", 24) }}<span>Estimated impact <span class="unit">(per day)</span></span></h2>
+    <p class="card__intro">Comparison of key metrics for today and the scenario. Values are estimates based on your input.</p>
+    {% if rows %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Metric</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Change</th></tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <th scope="row">{{ row.label }}</th>
+            <td>{{ row.before }}</td>
+            <td>{{ row.after }}</td>
+            <td>{{ trend(row.trend, row.change_display, row.good) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="result-summary" role="status">{{ icon("leaf", 24) }}<span>{{ summary }}</span></p>
+    {% else %}
+    <p class="empty" role="status">Correct the highlighted fields to see the estimated impact.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

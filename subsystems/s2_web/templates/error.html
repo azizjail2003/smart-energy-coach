@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block header_title %}{% endblock %}
+
+{% block content %}
+<section class="card error-card" aria-labelledby="error-title">
+  <p class="error-card__code">{{ status }}</p>
+  <h1 id="error-title">{{ title }}</h1>
+  <p>{{ message }}</p>
+  <a class="button button--primary" href="{{ url_for('pages.dashboard') }}">Go to dashboard</a>
+</section>
+{% endblock %}
