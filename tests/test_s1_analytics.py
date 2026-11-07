@@ -2,14 +2,20 @@
 
 from datetime import datetime
 import time
+from typing import Any
 
 import pytest
 
 from subsystems.s1_analytics import (
+    AnalyticsError,
     AnalyticsService,
     EnergyReading,
     EnergySimulator,
+    InvalidReadingError,
+    RepositoryError,
+    ScenarioSimulationError,
     ScoreCalculator,
+    ThresholdConfigurationError,
 )
 
 
@@ -246,3 +252,38 @@ def test_returned_timestamps_are_datetime_objects(tmp_path):
     assert alerts
     assert isinstance(alerts[0]["timestamp"], datetime)
     assert isinstance(service.simulate_live_step()[0]["timestamp"], datetime)
+
+
+
+def test_s1_custom_error_handling_classes(tmp_path):
+    """Verify custom S1 exception classes and backward compatibility with built-in exceptions."""
+    service = AnalyticsService(str(tmp_path / "errors.db"))
+
+    # InvalidReadingError is both an AnalyticsError and a ValueError
+    bad_reading = EnergyReading(
+        datetime(2026, 10, 28, 14, 30), "Lighting", -1.0, 21.0, 0.38, 80
+    )
+    with pytest.raises(InvalidReadingError):
+        bad_reading.validate()
+    with pytest.raises(AnalyticsError):
+        bad_reading.validate()
+    with pytest.raises(ValueError):
+        bad_reading.validate()
+
+    # Invalid timestamp string raises InvalidReadingError
+    bad_timestamp: Any = "not-a-timestamp"
+    with pytest.raises(InvalidReadingError):
+        EnergyReading(bad_timestamp, "Lighting", 1.0, 21.0, 0.38, 80)
+
+    # ThresholdConfigurationError on negative limit or blank building_id
+    with pytest.raises(ThresholdConfigurationError):
+        service.repository.save_limit("library", "Heating", -5.0)
+    with pytest.raises(ThresholdConfigurationError):
+        service.repository.save_limit("   ", "Heating", 2.0)
+
+    # ScenarioSimulationError is both an AnalyticsError and a TypeError
+    bad_summary: Any = ["invalid_summary_type"]
+    with pytest.raises(ScenarioSimulationError):
+        service.simulate_scenario(bad_summary)
+    with pytest.raises(TypeError):
+        service.simulate_scenario(bad_summary)
