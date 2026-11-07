@@ -20,3 +20,7 @@ data/
 instance/
 
 .DS_Store
+
+# S3 manual test scripts
+test_coach.py
+test_repo.py

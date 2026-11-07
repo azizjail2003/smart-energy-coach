@@ -1,6 +1,8 @@
 Flask==3.1.3
 Flask-WTF==1.3.0
 gunicorn==26.2.0
+pytest==9.1.1
 python-dotenv==1.2.4
-pytest>=9.1.1
 tzdata
+SQLAlchemy>=2.0.0
+openai>=1.0.0
