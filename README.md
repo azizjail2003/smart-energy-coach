@@ -1,74 +1,88 @@
-# AI-Powered Smart Energy Management System (FH Dortmund - Group 7)
+# AI-Powered Smart Energy Management System
 
-![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-3.x-000000?style=for-the-badge&logo=flask&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Pytest](https://img.shields.io/badge/Pytest-100%25_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)
+Capstone Team IV, Fachhochschule Dortmund. A web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach. The system has three subsystems, one per team member, each in its own folder under `subsystems/`.
 
-> **Master's Capstone Project — Topic 1: Smart Energy Coach**  
-> **Institution:** Fachhochschule Dortmund (University of Applied Sciences and Arts)  
-> **Team:** Group 7 (Python Capstone Project)
+## Team Overview
 
----
+| Member | Subsystem | Folder / Module |
+| --- | --- | --- |
+| Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics.py` |
+| Abdelaziz Jail | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
+| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_ai_data` |
 
-## 1. Project Overview & Objectives
+## System Design
 
-The **AI-Powered Smart Energy Management System** is an end-to-end campus sustainability platform designed for **Topic 1** of the FH Dortmund Master's Capstone Project. With a primary operational focus on the **FH Dortmund Smart Library** and multi-building support for `library`, `lecture-hall-a`, and `lab-building`, the system monitors device-level energy consumption, evaluates environmental and financial KPIs, detects threshold anomalies, simulates what-if conservation scenarios, and delivers actionable, AI-generated energy coaching.
+Class diagrams of the implemented subsystems. Each member adds the diagram of their own subsystem.
 
-### Core Objectives
-* **Carbon Footprint Reduction:** Continuously track electricity consumption across four primary campus device categories (**Heating**, **Lighting**, **Servers**, and **Other**) and quantify real-time CO₂ emissions.
-* **Occupant Comfort Preservation:** Balance energy reductions against indoor thermal comfort by evaluating room temperatures relative to an ideal **21.0 °C** campus setpoint.
-* **Cost Efficiency & Savings Transparency:** Calculate real-time operational costs in Euros (€), compare daily usage against historical baselines (**18.0 kWh/day**), and project financial savings via interactive "What-If" scenario modeling.
-* **Resilient AI Coaching:** Provide tailored, context-aware sustainability recommendations powered by the OpenAI API (`gpt-4o-mini`), backed by a deterministic offline fallback coach and persistent SQLite/MySQL storage.
+### S2 – Web Interface & Visualization
 
----
+Five classes. `PageView` is the only class the browser reaches; it reads numbers from S1, shapes them with `ChartPresenter`, validates input with the two forms and asks `CoachView` for the AI tip. Every private attribute has a `@property` getter and setter.
 
-## 2. Team Members & Subsystem Ownership
-
-The system is architected into three decoupled subsystems with strict facade and repository boundaries, each owned by a dedicated team member:
-
-| Team Member | Subsystem | Directory / Module | Core Responsibilities & Ownership |
-| :--- | :--- | :--- | :--- |
-| **Abdelhamid Ahbane** | **Subsystem 1 (S1):** Monitoring, Simulation & Analytics Engine | [`subsystems/s1_analytics.py`](subsystems/s1_analytics.py) | Deterministic energy simulation, mathematical KPI & Sustainability Score engine, 14-day hourly history seeding (`1,344` rows/building), `AlertMonitor`, multi-window aggregations, Week-over-Week comparison, and What-If scenario projections. |
-| **Abdelaziz Jail** | **Subsystem 2 (S2):** Web Interface & Visualization | [`subsystems/s2_web/`](subsystems/s2_web/) | Flask web application, `PageView` & `CoachView` controllers, `ChartPresenter` (Chart.js 4.4.6 visualizations), interactive `ScenarioForm` & `ThresholdForm` (Flask-WTF), CSRF security, and RESTful JSON API endpoints. |
-| **Nestor David Carrizo** | **Subsystem 3 (S3):** AI Coach, Data Persistence & Deployment | [`subsystems/s3_ai_data/`](subsystems/s3_ai_data/) | FH Dortmund OpenAI API Coach integration, deterministic Fallback & Cached Coach engine, `S3MySQLRepository` & SQLite data persistence layer, database schema migrations, and multi-container Docker Compose deployment. |
-
----
-
-## 3. Repository Structure
-
-```text
-.
-├── config.py                                  # Shared system constants, DB credentials, and OpenAI config
-├── README.md                                  # Project & Subsystem 1 documentation
-├── requirements.txt                           # Verified Python dependencies
-├── docs/                                      # Subsystem 1 UML class diagrams & staged handoff docs
-│   ├── Class_diagram_s1/
-│   │   ├── class-diagram-s1-svg.svg           # Subsystem 1 UML Class Diagram (SVG)
-│   │   └── class-diagram-s1.png               # Subsystem 1 UML Class Diagram (PNG)
-│   └── handoffs_s1/
-│       ├── STAGE_1_HANDOFF.md                 # Stage 1: EnergyReading data contract & validation
-│       ├── STAGE_2_HANDOFF.md                 # Stage 2: ScoreCalculator mathematical engine
-│       ├── STAGE_3_HANDOFF.md                 # Stage 3: EnergySimulator & 14-day seeding
-│       ├── STAGE_4_HANDOFF.md                 # Stage 4: AnalyticsService facade & AlertMonitor
-│       └── STAGE_5_FINAL_MASTER_HANDOFF.md    # Stage 5: Final Subsystem 1 master handoff & scripts
-├── subsystems/
-│   └── s1_analytics.py                        # Subsystem 1: Simulation, ScoreCalculator, AlertMonitor, AnalyticsService
-└── tests/
-    └── test_s1_analytics.py                   # Subsystem 1 unit, performance, and determinism test suite (14 tests)
+```mermaid
+classDiagram
+    direction LR
+    class PageView {
+        -_analytics
+        -_presenter
+        -_coach
+        +analytics «property»
+        +presenter «property»
+        +coach «property»
+        +index(building, category)
+        +history(building, period, category)
+        +scenarios(building, form)
+        +settings(building, form)
+        +api_kpis() api_score() api_hourly() api_aggregates() api_alerts()
+    }
+    class ChartPresenter {
+        -_timezone
+        +timezone «property»
+        +to_line_chart(points)
+        +to_bar_chart(totals)
+        +to_daily_chart(days)
+        +sparkline(values)
+    }
+    class ScenarioForm {
+        <<FlaskForm>>
+        +heating_change
+        +lighting_reduction
+        +changes «property»
+        +validate() bool
+    }
+    class ThresholdForm {
+        <<FlaskForm>>
+        +heating
+        +lighting
+        +servers
+        +other
+        +limits «property»
+        +validate() bool
+    }
+    class CoachView {
+        -_coach
+        +coach «property»
+        +page(building)
+        +ask(question, tone, building)
+        +status()
+        +tips(building)
+    }
+    PageView --> ChartPresenter : builds charts with
+    PageView --> ScenarioForm : scenarios page
+    PageView --> ThresholdForm : settings page
+    PageView --> CoachView : AI tip on dashboard
 ```
 
----
+| Class | File | Role |
+| --- | --- | --- |
+| `PageView` | `subsystems/s2_web/views/page_view.py` | Builds the context of every page and the payload of every JSON endpoint. |
+| `ChartPresenter` | `subsystems/s2_web/presenter.py` | Turns readings into Chart.js data in the display timezone. |
+| `ScenarioForm` | `subsystems/s2_web/forms.py` | What-if inputs: heating change (−3 to +3 °C) and lighting reduction (0 to 50 %). |
+| `ThresholdForm` | `subsystems/s2_web/forms.py` | One alert limit per device type (0.1 to 20 kWh/h). |
+| `CoachView` | `subsystems/s2_web/views/coach_view.py` | AI Coach page, chat answers and the dashboard tip, on top of the S3 coach. |
 
-## 4. Deep Dive: Subsystem 1 (Simulation & Analytics Engine)
+### S1 – Monitoring, Simulation & Analytics Engine
 
-**Owner:** Abdelhamid Ahbane  
-**Implementation:** [`subsystems/s1_analytics.py`](subsystems/s1_analytics.py) | **Test Suite:** [`tests/test_s1_analytics.py`](tests/test_s1_analytics.py)
-
-Subsystem 1 serves as the analytical core of the application. It transforms raw or simulated device telemetry into validated readings, environmental metrics, composite sustainability scores, threshold alerts, time-series aggregations, and scenario projections without exposing internal SQL or mathematical formulas to downstream consumers.
-
-### 4.1 The 5 Collaborating UML Classes
+Five collaborating UML classes (plus the `SQLiteRepository` offline persistence adapter). `AnalyticsService` is the facade consumed by S2 and S3; it coordinates deterministic device simulation (`EnergySimulator`), pure KPI and sustainability math (`ScoreCalculator`), per-building threshold checks (`AlertMonitor`), and validated measurement records (`EnergyReading`).
 
 ```mermaid
 classDiagram
@@ -156,96 +170,43 @@ classDiagram
     SQLiteRepository ..> EnergyReading : persists
 ```
 
-1. **`EnergyReading` (`@dataclass`):**
-  * Validated data contract representing a single timestamped measurement across seven attributes: `timestamp` (`datetime`), `device_type`, `kwh`, `room_temp`, `co2_kg`, `sustainability_score` (aliased via `@property def score`), and `building_id` (defaulting to `"library"`).
-   * Enforces strict pre-persistence data integrity via `validate()`:
-     * Rejects negative energy consumption (`kWh < 0`).
-     * Enforces realistic indoor temperature bounds (`0.0 °C <= room_temp <= 45.0 °C`).
-     * Restricts `device_type` to configured campus categories (`Heating`, `Lighting`, `Servers`, `Other`).
-     * Ensures `building_id` is a valid, non-empty string.
-2. **`ScoreCalculator`:**
-   * Pure, stateless mathematical engine with zero database or web dependencies (`S1-NFR1`, `S1-NFR2`). Computes CO₂, EUR cost, thermal comfort, and the weighted sustainability score using parameters from `config.py`.
-3. **`EnergySimulator`:**
-  * Generates realistic synthetic campus device telemetry governed by time-of-day occupancy multipliers, device base loads, and an isolated pseudo-random number generator (`random.Random(42)`). Returned timestamps are `datetime` objects.
-4. **`AlertMonitor`:**
-   * Autonomous per-building threshold manager. Loads custom alert limits from persistent storage (`alert_thresholds` table), merges them safely with `config.DEFAULT_LIMITS`, and flags anomalous device readings.
-5. **`AnalyticsService` (Facade):**
-  * Unified service facade consumed by Subsystem 2 (Web UI) and Subsystem 3 (AI Coach). Coordinates seeding, live simulation steps, dashboard summaries, `get_score()`, `get_aggregates(period, category)`, `get_alerts()`, week-over-week comparisons, and `estimate_scenario(changes)` over an injected S3 MySQL repository (or the built-in `SQLiteRepository` offline adapter).
+| Class | File | Role |
+| --- | --- | --- |
+| `AnalyticsService` | `subsystems/s1_analytics.py` | Facade coordinating seeding, live steps, KPIs, scores, aggregations, alerts, and what-if scenarios. |
+| `EnergySimulator` | `subsystems/s1_analytics.py` | Deterministic generator (`seed=42`) for live device telemetry and 14-day hourly history (`1,344` rows/building). |
+| `ScoreCalculator` | `subsystems/s1_analytics.py` | Stateless mathematical engine for CO₂ (`0.38 kg/kWh`), cost (`0.35 €/kWh`), comfort (`21.0 °C`), and score (`0–100`). |
+| `AlertMonitor` | `subsystems/s1_analytics.py` | Loads per-building thresholds from storage, merges defaults, and detects device limit breaches. |
+| `EnergyReading` | `subsystems/s1_analytics.py` | Dataclass validating non-negative kWh, realistic temperature (`0–45 °C`), device category, and building ID. |
+
+### S3 – AI Coach, Data Persistence & Deployment
+
+Added by the S3 owner.
+
+## Presentation Link
+
+Team video (3 to 5 minutes): _link to be added after recording_.
 
 ---
 
-### 4.2 Mathematical Engine & Formulas (`ScoreCalculator`)
+# S1 – Monitoring, Simulation & Analytics Engine
 
-All conversion factors are centrally managed in [`config.py`](config.py):
-* **Carbon Emission Factor:** `0.38 kg CO₂ / kWh`
-* **Electricity Tariff:** `0.35 € / kWh`
-* **Ideal Indoor Temperature:** `21.0 °C`
-* **Daily Baseline Consumption:** `18.0 kWh/day`
+**Owner:** Abdelhamid Ahbane  
+**Implementation:** `subsystems/s1_analytics.py` | **Shared Config:** `config.py` | **Test Suite:** `tests/test_s1_analytics.py`  
+**Detailed Handoff Docs:** `docs/handoffs_s1/STAGE_1_HANDOFF.md` – `STAGE_5_FINAL_MASTER_HANDOFF.md`
 
-#### 1. CO₂ Emissions (`calc_co2`)
-```text
-CO₂ (kg) = round(kWh × 0.38, 2)
-```
+## Core Capabilities & Formulas
 
-#### 2. Operational Energy Cost (`calc_cost`)
-```text
-Cost (€) = round(kWh × 0.35, 2)
-```
+* **Supported Buildings:** `library` (default), `lecture-hall-a`, and `lab-building`
+* **Device Categories:** `Heating` (`1.4 kWh` base), `Servers` (`1.1 kWh` base), `Lighting` (`0.5 kWh` base), `Other` (`0.3 kWh` base)
+* **Mathematical Engine (`ScoreCalculator`):**
+  * **CO₂ Emissions:** `round(kWh × 0.38, 2)` kg
+  * **Energy Cost:** `round(kWh × 0.35, 2)` EUR
+  * **Comfort Index (`K`):** `round(max(0.0, min(1.0, 1.0 - (|room_temp - 21.0| / 10.0))), 2)`
+  * **Sustainability Score:** `round(100 × (0.40 × E + 0.35 × C + 0.25 × K))` where `E = 1.0 - (hourly_kwh / 4.0)` and `C = 1.0 - ((hourly_kwh × 0.38) / 1.6)`
+* **Deterministic Simulation & Seeding:** Uses an isolated `random.Random(42)` instance with occupancy multipliers (`1.4×` from `08:00–18:00`, `0.6×` off-peak) to seed 14 days of hourly history (`1,344` rows per building) in a single batch transaction (`< 0.05 s`). All returned timestamps are Python `datetime` objects.
+* **What-If Scenario Projection (`simulate_scenario` & `estimate_scenario`):** Models heating setpoint changes (`6%` heating delta per `1.0 °C`) and lighting reductions (`0–50%`) without mutating database records.
 
-#### 3. Thermal Comfort Index (`calc_comfort`)
-Measures occupant comfort on a normalized `0.0` to `1.0` scale. Comfort peaks at `1.0` when `room_temp = 21.0 °C` and decreases linearly by `0.1` per degree of deviation, reaching `0.0` at `±10.0 °C` from the ideal setpoint:
-```text
-K = round(max(0.0, min(1.0, 1.0 - (|room_temp - 21.0| / 10.0))), 2)
-```
-
-#### 4. Weighted Sustainability Score (`calc_sustainability_score`)
-Combines three normalized sub-scores—**Energy Efficiency (`E`)**, **Carbon Efficiency (`C`)**, and **Thermal Comfort (`K`)**—into an integer score from `0` to `100`:
-```text
-E     = round(max(0.0, min(1.0, 1.0 - (hourly_kwh / 4.0))), 2)
-C     = round(max(0.0, min(1.0, 1.0 - ((hourly_kwh × 0.38) / 1.6))), 2)
-Score = round(100 × (0.40 × E + 0.35 × C + 0.25 × K))   [Range: 0 to 100]
-```
-
----
-
-### 4.3 Deterministic Simulation & 14-Day Hourly Seeding (`S1-FR1`, `S1-FR2`, `S1-NFR2`, `S1-NFR4`)
-
-To guarantee reproducible unit tests, consistent UI demonstrations, and deterministic grading across environments, `EnergySimulator` isolates its random state using `random.Random(42)`:
-
-* **Device Base Loads:**
-  * **Heating:** `1.4 kWh`
-  * **Servers:** `1.1 kWh`
-  * **Lighting:** `0.5 kWh`
-  * **Other:** `0.3 kWh`
-* **Campus Occupancy Schedule:**
-  * **Daytime Peak (08:00 – 18:00):** `1.4×` multiplier
-  * **Off-Peak / Night (19:00 – 07:00):** `0.6×` multiplier
-* **Realistic Variation Bounds:**
-  * Energy noise multiplier: uniform random factor between `0.85` and `1.25`
-  * Room temperature variation: `21.0 °C` with uniform random offset between `-1.5 °C` and `+2.0 °C`
-* **14-Day Batch Seeding (`seed_history` & `seed_if_empty`):**
-  * Generates `14 days × 24 hours = 336` hourly timestamps across all `4` device categories, producing **`1,344` validated readings per building**.
-  * Persisted in a single batch transaction (`executemany`) executing well under the 10-second NFR ceiling (typically `< 0.05 seconds`).
-
----
-
-### 4.4 Time-Series Aggregations, Week-over-Week Engine & Scenario Projections (`S1-FR7`, `S1-FR9`)
-
-* **Multi-Window Aggregations (`get_aggregates`):**
-  * **`hourly_series`:** 24-hour chronological breakdown of total kWh and per-device kWh for the current day.
-  * **`last_week_hourly_series`:** Corresponding 24-hour series from 7 days prior for direct overlay charting.
-  * **`daily_totals` & `weekly_totals`:** Aggregated kWh, CO₂ (kg), and Cost (€) for the 24-hour and 168-hour windows, including `vs_last_week_pct`.
-  * **`by_device_week`:** 7-day cumulative kWh split across `Heating`, `Lighting`, `Servers`, and `Other`.
-  * Supports `period="day"`, `"week"`, and `"month"`, optional device `category`, and returns hourly series timestamps as Python `datetime` objects.
-* **Week-over-Week Comparison Engine (`compute_week_over_week`):**
-  * Compares the trailing 7-day window (`latest - 167h` to `latest`) against the preceding 7-day window (`latest - 335h` to `latest - 167h`), returning exact percentage changes (`change_pct`) for `energy_kwh`, `co2_kg`, and `cost_eur`.
-* **What-If Scenario Projections (`simulate_scenario`):**
-  * Pure, non-destructive calculation modeling hardware and setpoint adjustments without modifying database records:
-    * **Heating Setpoint Adjustment (`heating_delta_c`):** Each `1.0 °C` reduction lowers Heating consumption by **6%** (`Heating_kWh × heating_delta_c × 0.06`).
-    * **Lighting Reduction (`light_reduction_pct`):** Scales Lighting consumption directly by the selected percentage (`0%` to `50%`).
-    * Returns `before_kwh`, `after_kwh`, `before_co2`, `after_co2`, `before_cost`, `after_cost`, `before_score`, and `after_score`.
-
-### 4.5 Subsystem 1 Requirements Traceability Matrix
+## S1 Requirements Traceability Matrix
 
 | ID | Requirement Summary | Implemented By | Automated Proof (`tests/test_s1_analytics.py`) |
 | :--- | :--- | :--- | :--- |
@@ -261,206 +222,251 @@ To guarantee reproducible unit tests, consistent UI demonstrations, and determin
 | **FR10** | Validate and persist readings per building | `EnergyReading.validate()`, `save_reading()` | `test_reading_validation_rejects_negative_kwh`, `test_building_isolation` |
 | **NFR1–10** | `< 50 ms` calc, determinism (`seed=42`), modular facade, type safety, safe fallbacks | `s1_analytics.py` & `config.py` | Full 14-test suite in `tests/test_s1_analytics.py`, including `test_returned_timestamps_are_datetime_objects` |
 
----
+Run the Subsystem 1 test suite:
 
-## 5. Cross-Subsystem Links & Integration Architecture
-
-```text
-+-----------------------------------------------------------------------------------+
-|                   SUBSYSTEM 2: Web Interface & Visualization                      |
-|               (Owner: Abdelaziz Jail — subsystems/s2_web/)                        |
-|                                                                                   |
-|  [Jinja2 Templates + Chart.js]  <--->  [PageView / CoachView / ChartPresenter]    |
-|  [ScenarioForm / ThresholdForm] <--->  [HTML Routes (/) & REST API (/api/*)]      |
-+-----------------------------------------+-----------------------------------------+
-                                          |
-                 Calls Facade API         |         Requests AI Coaching &
-          (get_dashboard_summary,         |         Persists Thresholds
-           simulate_scenario, etc.)       v
-+-----------------------------------------+-----------------------------------------+
-|              SUBSYSTEM 1: Simulation & Analytics Engine                           |
-|              (Owner: Abdelhamid Ahbane — subsystems/s1_analytics.py)              |
-|                                                                                   |
-|  [AnalyticsService Facade] ---> [EnergySimulator] ---> [ScoreCalculator]          |
-|             |              ---> [AlertMonitor]    ---> [EnergyReading]            |
-+-------------+---------------------------------------------------------------------+
-              |
-              |  Delegates Persistence via Repository Protocol
-              v
-+-----------------------------------------------------------------------------------+
-|            SUBSYSTEM 3: AI Coach, Data Persistence & Deployment                   |
-|            (Owner: Nestor David Carrizo — subsystems/s3_ai_data/)                 |
-|                                                                                   |
-|  [S3MySQLRepository / SQLiteRepository]  <--->  [(MySQL 8.0 / SQLite DB)]         |
-|  [AICoachService (OpenAI + Fallback)]    <--->  [FH Dortmund OpenAI Endpoint]     |
-+-----------------------------------------------------------------------------------+
-```
-
-### 5.1 Integration with Subsystem 2: Web UI & Visualization ([`subsystems/s2_web/`](subsystems/s2_web/))
-**Owner:** Abdelaziz Jail
-
-Subsystem 2 is structured around five core classes (`PageView`, `ChartPresenter`, `ScenarioForm`, `ThresholdForm`, and `CoachView`) and interacts with Subsystem 1 exclusively through the `AnalyticsService` facade:
-
-* **Application Startup & Seeding:**
-  ```python
-  from subsystems.s1_analytics import AnalyticsService
-
-  analytics_service = AnalyticsService(db_or_repo)
-  analytics_service.seed_if_empty(days=14, building_id="library")
-  ```
-* **HTML Page Routes (`subsystems/s2_web/views/pages.py`):**
-  * `/` (**Dashboard**): Renders real-time KPIs (`energy_today`, `co2_today`, `cost_today`, `savings_eur`, `savings_co2`), the Sustainability Score card (`score`, `E`, `C`, `K`), 24h vs. Last Week line charts, and active AI Coach tips.
-  * `/history` (**History & Alerts**): Displays 7-day/30-day device share bar charts, daily energy totals, and threshold breach logs from `AlertMonitor`.
-  * `/scenarios` (**What-If Scenarios**): Validates user slider inputs via `ScenarioForm` (Heating change from `-3 °C` to `+3 °C`, Lighting reduction from `0%` to `50%`) and invokes `analytics_service.simulate_scenario(...)`.
-  * `/coach` (**AI Coach**): Interactive chat interface supporting tone selection (`encouraging`, `analytical`, `strict`).
-  * `/settings` (**Alert Thresholds**): Validates per-device kWh limits (`0.1` to `20.0 kWh/h`) via `ThresholdForm` and persists them per building.
-* **RESTful JSON API Endpoints (`subsystems/s2_web/views/api.py`):**
-  * `GET /api/kpis?building=library&category=heating`
-  * `GET /api/score?building=library`
-  * `GET /api/hourly?building=library&day=2024-05-14&compare=1`
-  * `GET /api/aggregates?building=library&period=week`
-  * `GET /api/alerts?building=library`
-  * `POST /api/coach/ask` (CSRF-protected JSON endpoint)
-  * `GET /api/coach/status`
-
-### 5.2 Integration with Subsystem 3: AI Coach & Data Layer ([`subsystems/s3_ai_data/`](subsystems/s3_ai_data/))
-**Owner:** Nestor David Carrizo
-
-Subsystem 3 provides two critical pillars for the integrated platform:
-
-1. **Relational Persistence (`S3MySQLRepository` & `SQLiteRepository`):**
-   Implements the repository protocol injected into `AnalyticsService(db_or_repo)` to manage two core tables:
-   ```sql
-   CREATE TABLE IF NOT EXISTS energy_readings (
-       id INTEGER PRIMARY KEY AUTO_INCREMENT,
-       timestamp DATETIME NOT NULL,
-       building_id VARCHAR(50) NOT NULL,
-       device_type ENUM('Heating','Lighting','Servers','Other') NOT NULL,
-       kwh DECIMAL(6,2) NOT NULL,
-       room_temp DECIMAL(4,1) NOT NULL,
-       co2_kg DECIMAL(6,2) NOT NULL,
-       sustainability_score INT NOT NULL
-   );
-
-   CREATE TABLE IF NOT EXISTS alert_thresholds (
-       building_id VARCHAR(50) NOT NULL,
-       device_type VARCHAR(50) NOT NULL,
-       limit_kwh DECIMAL(6,2) NOT NULL,
-       PRIMARY KEY (building_id, device_type)
-   );
-   ```
-2. **Context-Aware AI Coach (`AICoachService`):**
-   Consumes the stable dictionary output of `AnalyticsService.get_dashboard_summary(building_id)`—specifically `energy_today`, `co2_today`, `score`, `by_device`, `alerts`, and `week_over_week`—to construct a grounded system prompt for the OpenAI API (`gpt-4o-mini`). If the API key is omitted or network connectivity fails, S3 seamlessly degrades to a deterministic **Fallback Coach** so the UI never hangs or crashes.
-
----
-
-## 6. Getting Started & Local Development
-
-### Prerequisites
-* **Python:** `3.11+` (tested with Python 3.11 and 3.12)
-* **Database:** Built-in SQLite (zero-config default) or MySQL 8.0+
-
-### 1. Clone the Repository
 ```bash
-git clone https://github.com/fh-dortmund-group7/smart-energy-coach.git
-cd smart-energy-coach
+python -m pytest tests/test_s1_analytics.py -v
 ```
 
-### 2. Create a Virtual Environment & Install Dependencies
-**Linux / macOS:**
+---
+
+# S2 – Web interface
+
+Flask frontend (subsystem S2). All data comes from mock services; the analytics (S1) and AI coach (S3) subsystems are not connected yet.
+
+## Setup
+
+Tested with Python 3.12.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 ```
 
-**Windows (PowerShell):**
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
+Development server:
 
-### 3. Configure Environment Variables (`.env`)
-Create a `.env` file in the project root:
-```ini
-# Flask Security & Mode
-SECRET_KEY=replace-with-a-64-char-hex-secret-key
-FLASK_DEBUG=0
-USE_MOCK=false
-
-# Local SQLite Fallback Path
-DB_PATH=data/energy.db
-
-# MySQL Database Configuration (Subsystem 3)
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=energy_user
-MYSQL_PASSWORD=energy_pass
-MYSQL_DATABASE=smart_energy
-
-# FH Dortmund / OpenAI API Configuration (Subsystem 3)
-OPENAI_API_KEY=sk-your-openai-api-key
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
-```
-*(Tip: Generate a secure `SECRET_KEY` with `python -c "import secrets; print(secrets.token_hex(32))"`)*
-
-### 4. Run the Application Locally
-**Development Server:**
 ```bash
 flask run
 ```
-**Production-Style Server (Gunicorn):**
+
+Production-style server with two workers:
+
 ```bash
 gunicorn -w 2 -b 127.0.0.1:8000 wsgi:app
 ```
-Open `http://127.0.0.1:5000` (Flask) or `http://127.0.0.1:8000` (Gunicorn) in your browser.
 
-### 5. Run the Automated Test Suite
-Execute the full Pytest suite (covering S1 analytics, S2 web routes/forms, and S3 persistence/AI fallback):
-```bash
-python -m pytest -v
-```
-To run only Subsystem 1's unit and performance tests:
-```bash
-python -m pytest tests/test_s1_analytics.py -v
-```
-To verify syntax compilation across core modules:
-```bash
-python -m py_compile config.py subsystems/s1_analytics.py tests/test_s1_analytics.py
-```
-
----
-
-## 7. Docker Deployment
-
-Subsystem 3 provides full containerization orchestrating the **Flask/Gunicorn Web Application** alongside a persistent **MySQL 8.0 Database** with automatic healthchecks and volume mounting.
-
-Build and launch the entire stack with a single command:
+Tests:
 
 ```bash
-docker compose up --build
+python -m pytest
 ```
 
-* **Web Application UI & API:** Accessible at `http://localhost:8000` (or `http://localhost:5000` depending on port mapping).
-* **MySQL 8.0 Service:** Exposed internally on port `3306` with automatic schema initialization and 14-day historical seeding on first boot.
-* To stop the stack and preserve database volumes:
-  ```bash
-  docker compose down
-  ```
+### Configuration
 
----
+| Variable | Default | Meaning |
+|---|---|---|
+| `SECRET_KEY` | none (required) | Signs the session cookie and CSRF tokens. The app refuses to start without it. Use the same value for all workers. |
+| `FLASK_DEBUG` | off | Set to `1` only for local debugging. |
+| `USE_MOCK` | `true` | `false` stops the app with a configuration error until real S1/S3 adapters exist. |
+| `MOCK_COACH_STATUS` | `online` | Mock coach status: `online`, `fallback` or `cached`. |
 
-## 8. Screencast & Presentation Links
+## Structure
 
-* **7-Minute Individual & Project Screencast Video:**  
-  [🎥 Watch Screencast Video *(Link to be added after recording)*](#)
-* **Team Capstone Presentation Video (3–5 Minutes):**  
-  [🎬 Watch Team Overview Video *(Link to be added after recording)*](#)
-* **Final Defense Presentation Slides (PDF / PPTX):**  
-  [📊 View Presentation Slides *(Link to be added)*](#)
+```
+subsystems/
+  s2_web/
+    __init__.py        app factory, configuration, error handlers
+    catalog.py         accepted buildings, device types, tones and periods
+    forms.py           ScenarioForm and ThresholdForm (Flask-WTF)
+    presenter.py       ChartPresenter and the formatting helpers behind it
+    services/
+      __init__.py      get_analytics(), get_coach() and the view factories: the only way routes reach S1/S3
+      analytics.py     MockAnalyticsService (S1 mock)
+      coach.py         MockAICoach (S3 mock)
+      mock_data.py     report figures and demo fixtures
+    views/
+      page_view.py     PageView: context for the pages and JSON endpoints
+      coach_view.py    CoachView: AI Coach page, chat answers, dashboard tip
+      pages.py         the five page routes (parse request, call PageView, render)
+      api.py           JSON routes (parse request, call PageView, jsonify)
+    templates/         Jinja templates
+    static/            style.css, plain JavaScript, Chart.js 4.4.6
+tests/s2/              pytest suite for S2
+docs/s2/DESIGN.md      visual specification
+wsgi.py                entry point for flask run and Gunicorn
+```
 
----
+Pages: Dashboard `/`, History & Alerts `/history`, Scenarios `/scenarios`, AI Coach `/coach`, Settings `/settings`. Every page accepts `?building=`; the choice is kept in the session.
 
-*Developed for the Master's Python Capstone Project at **Fachhochschule Dortmund** by **Group 7** (Abdelhamid Ahbane, Abdelaziz Jail, and Nestor David Carrizo).*
+### Click path
+
+Every page is one click away in the navigation rail on the left, and every feature is reached in at most two clicks from the dashboard, within the limit of three (S2-NFR2). Typing in a field is not counted as a click. Start the app, open `http://127.0.0.1:5000/` and follow these steps:
+
+| Feature | Clicks from the dashboard | What you should see |
+|---|---|---|
+| Today's figures, score gauge and alert banner | 0 | Four KPI cards (15.7 kWh, 6.0 kg CO₂, €5.50, €0.35 saved, €2.35 this week), the score gauge at 82 in the green band, and the banner "Heating is above the limit at 13:00." |
+| Explain a metric | 1: the ⓘ next to Sustainability Score, Energy (E), Carbon (C), Comfort (K) or CO₂ today | A tooltip with the formula behind the number |
+| Filter by device type | 1: the Heating chip | The cards, trend lines and hourly chart switch to heating only (7.5 kWh) |
+| Compare with last week | 1: untick "Compare with last week" | The dashed last-week line disappears from the hourly chart |
+| Switch building | 2: building menu at the top, then Lab Building | Every figure changes to the Lab Building demo data |
+| Daily use by device type | 2: History & Alerts, then Last 7 days | Stacked bars per day; hovering a bar shows each device type and the day's total |
+| Alerts and week-over-week table | 1: History & Alerts | Three alerts (latest first) and last week vs this week (109.9 → 103.3 kWh) |
+| What-if scenario | 2: Scenarios, then Calculate scenario after typing −1 and 20 | Before/after: 15.7 → 14.6 kWh, score 82 → 87 |
+| Ask the AI coach | 2: AI Coach, then Send after typing a question | The answer as plain text with its source and response time |
+| Change alert limits | 2: Settings, then Save limits after setting Lighting to 0.2 | "Limits saved for this session."; back on the dashboard the banner lists the new alerts within 10 s |
+| Theme | 1: the theme button in the rail | System → Dark → Light |
+
+## Mock data
+
+`subsystems/s2_web/services/mock_data.py` holds every figure. The Library values (reference date Tuesday 14 May 2024) are the capstone report figures. Lecture Hall A and Lab Building are demonstration datasets made up for the prototype and are labelled as such in the interface. All series are fixed lists or derived from them, so changing building or category never changes history. Only `/api/score` adds a random variation of at most ±0.5 points to the reference score. Times use Europe/Berlin.
+
+## Service integration (provisional contracts)
+
+The interfaces below are provisional contracts for S2's mock services. They describe what S2 needs and do not prescribe how S1 or S3 work internally; when the real subsystems exist, adapters translate their output into this shape.
+
+```python
+class MockAnalyticsService:            # S1
+    get_kpis(building_id) -> dict
+    get_score(building_id) -> dict
+    get_hourly(building_id, day, category=None) -> list[tuple[datetime, float]]
+    get_aggregates(building_id, period="week", category=None) -> dict[str, float]
+    get_week_comparison(building_id) -> dict
+    get_alerts(building_id, limit=10) -> list[dict]
+    estimate_scenario(building_id, heating_change_c: float, lighting_reduction_pct: int) -> dict
+    get_limits(building_id) -> dict[str, float]
+    save_limits(building_id, limits: dict[str, float]) -> None
+
+class MockAICoach:                     # S3
+    status() -> str                    # "online", "fallback" or "cached"
+    ask(question: str, tone: str, building_id: str) -> dict
+    tips(building_id) -> list[str]
+```
+
+Integration point: `subsystems/s2_web/services/__init__.py`. Replace the two factory functions with adapters for the real services and remove the `USE_MOCK` check in `subsystems/s2_web/__init__.py`. Views and templates do not need to change.
+
+### Session state
+
+Alert limits are saved per building in the signed Flask session cookie. Every Gunicorn worker can read them as long as all workers share `SECRET_KEY`. Limitations: they belong to one browser, disappear when the cookie is cleared or the browser session ends, and are not shared between users. Persistent storage belongs to the integrated system.
+
+## JSON API
+
+All responses are JSON. Times are ISO 8601 with offset (Europe/Berlin), dates are `YYYY-MM-DD`, energy is in kWh, CO₂ in kg and cost in EUR. Every response that concerns a building includes `building: {"id", "name", "data"}`, where `data` is `reference` (report figures) or `demo`. A value of `null` in a chart series means no reading for that interval.
+
+Accepted values: `building` = `library`, `lecture-hall-a`, `lab-building`; `category` = `heating`, `lighting`, `servers`, `other` (omit for all); `period` = `today`, `week`, `7d`, `30d` (`week` and `7d` both mean the 7 days ending on the report date); `tone` = `encouraging`, `analytical`, `strict`.
+
+Errors use HTTP 400 (404 for unknown routes, 405 for a wrong method) and this shape:
+
+```json
+{"error": {"code": "invalid_parameter", "message": "'building' must be one of: library, lecture-hall-a, lab-building."}}
+```
+
+Error codes: `missing_parameter`, `invalid_parameter`, `invalid_request`, `csrf_failed`, `not_found`, `method_not_allowed`, `server_error`.
+
+Charts share one structure, built in `presenter.py` and drawn by `static/js/common.js`:
+
+```json
+{"type": "line", "labels": ["00:00", "01:00"], "datasets": [{"key": "primary", "label": "Today", "data": [0.06, 0.06]}],
+ "unit": "kWh", "x_title": "Hour", "y_title": "kWh", "limit": {"value": 2.0, "label": "Limit: 2.0 kWh"},
+ "above_limit": [13], "summary": "Total 7.5 kWh. Peak 2.40 kWh at 13:00. Above the 2.0 kWh limit at 13:00."}
+```
+
+### GET /api/kpis
+
+Parameters: `building` (required), `category` (optional). Savings stay building-wide (`scope: "building"`) because the data has no per-category savings.
+
+```json
+{"building": {"id": "library", "name": "Library", "data": "reference"}, "date": "2024-05-14", "category": "heating",
+ "kpis": {
+   "energy": {"value": 7.5, "unit": "kWh", "display": "7.5", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
+   "co2": {"value": 2.9, "unit": "kg", "display": "2.9", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week", "help": "Energy use × 0.38 kg CO₂ per kWh, …"},
+   "cost": {"value": 2.62, "unit": "EUR", "display": "€2.62", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs last week"},
+   "savings": {"value": 0.35, "unit": "EUR", "display": "€0.35", "co2_kg": 1.0, "co2_display": "1.0", "change_pct": -6, "change_display": "6%", "trend": "down", "compared_to": "vs normal use", "negative": false, "scope": "building",
+               "week": {"eur": 2.35, "co2_kg": 2.5, "display": "€2.35", "co2_display": "2.5", "negative": false}}}}
+```
+
+`savings.week` is this week against last week, from the week comparison. `negative` is `true` when more was used than the baseline; the page then shows the value in red. Every card also carries a `spark` trend line (left out above).
+
+Error (`GET /api/kpis`): `{"error": {"code": "missing_parameter", "message": "'building' is required."}}`
+
+### GET /api/score
+
+Parameters: `building` (required). Simulated live reading with one decimal; `reference_score` is the whole-number report value. `band` is the gauge colour (`red` below 60, `amber` 60–80, `green` above 80) and `needle_deg` the needle angle from −90 (0) to 90 (100). `help` holds the tooltip text.
+
+```json
+{"building": {"id": "library", "name": "Library", "data": "reference"}, "label": "Building score", "scope": "building",
+ "score": 82.1, "display": "82.1", "reference_score": 82, "target": 90,
+ "band": {"band": "green", "label": "Good", "needle_deg": 57.8}, "reference_band": {"band": "green", "label": "Good", "needle_deg": 57.6},
+ "help": "Weighted mix of energy, carbon and comfort, from 0 to 100. Red below 60, amber 60 to 80, green above 80.",
+ "components": {"energy": {"value": 0.86, "display": "0.86", "weight": 0.4, "help": "E, weight 0.40: …"}, "carbon": {"value": 0.81, "display": "0.81", "weight": 0.35, "help": "C, weight 0.35: …"}, "comfort": {"value": 0.78, "display": "0.78", "weight": 0.25, "help": "K, weight 0.25: …"}},
+ "formula": "Score = 100 × (0.40·E + 0.35·C + 0.25·K)", "measured_at": "2026-10-21T00:12:18+02:00", "time_display": "00:12:18"}
+```
+
+Error (`?building=mensa`): `{"error": {"code": "invalid_parameter", "message": "'building' must be one of: library, lecture-hall-a, lab-building."}}`
+
+### GET /api/hourly
+
+Parameters: `building` (required), `day` (default: report date, fixtures cover 2024-04-15 to 2024-05-14), `category` (optional), `compare=0|1` (default `0`). `limit_kwh` is set only for a single category. The comparison series is the same weekday one week earlier and is omitted (`comparison_day: null`) when that day has no fixture.
+
+```json
+{"building": {"id": "library", "name": "Library", "data": "reference"}, "day": "2024-05-14", "category": "heating",
+ "unit": "kWh", "interval": "1h", "timestamps": ["2024-05-14T00:00:00+02:00", "…"], "comparison_day": "2024-05-07", "limit_kwh": 2.0,
+ "chart": {"type": "line", "labels": ["00:00", "…"], "datasets": [{"key": "primary", "label": "Today", "data": [0.06, "…"]}, {"key": "comparison", "label": "Last week", "data": [0.09, "…"]}],
+           "unit": "kWh", "x_title": "Hour", "y_title": "kWh", "limit": {"value": 2.0, "label": "Limit: 2.0 kWh"}, "above_limit": [13],
+           "summary": "Total 7.5 kWh. Peak 2.40 kWh at 13:00. Above the 2.0 kWh limit at 13:00."}}
+```
+
+Error (`?building=library&day=14.05.2024`): `{"error": {"code": "invalid_parameter", "message": "'day' must be a date in YYYY-MM-DD format."}}`
+
+### GET /api/aggregates
+
+Parameters: `building` (required), `period` (default `week`). `daily_chart` is `null` for `today`; otherwise it is a stacked bar chart with one dataset per device type and the day `totals`.
+
+```json
+{"building": {"id": "library", "name": "Library", "data": "reference"}, "period": "week", "start": "2024-05-08", "end": "2024-05-14",
+ "unit": "kWh", "total_kwh": 103.3,
+ "categories": [{"id": "heating", "label": "Heating", "kwh": 49.6, "share_pct": 48}, {"id": "lighting", "label": "Lighting", "kwh": 20.7, "share_pct": 20},
+                {"id": "servers", "label": "Servers", "kwh": 22.7, "share_pct": 22}, {"id": "other", "label": "Other", "kwh": 10.3, "share_pct": 10}],
+ "chart": {"type": "bar", "labels": ["Heating", "Lighting", "Servers", "Other"], "categories": ["heating", "lighting", "servers", "other"],
+           "datasets": [{"key": "share", "label": "Share of total", "data": [48, 20, 22, 10]}], "unit": "%", "…": "…"},
+ "daily_chart": {"type": "bar", "stacked": true, "labels": ["Wed 8 May", "…"], "categories": ["heating", "lighting", "servers", "other"],
+                 "datasets": [{"key": "heating", "label": "Heating", "data": [7.63, "…"]}, "…"], "totals": [15.9, "…"], "unit": "kWh", "…": "…"}}
+```
+
+Error (`?building=library&period=year`): `{"error": {"code": "invalid_parameter", "message": "'period' must be one of: today, week, 7d, 30d."}}`
+
+### GET /api/alerts
+
+Parameters: `building` (required). Readings above the session's limits, latest first, at most 10. `banner` lists today's alerts for the dashboard (`null` when there are none); the dashboard requests it every 10 s and uses `key` to tell a new alert from one already dismissed.
+
+```json
+{"building": {"id": "library", "name": "Library", "data": "reference"}, "unit": "kWh",
+ "limits_kwh": {"heating": 2.0, "lighting": 0.8, "servers": 3.5, "other": 1.0},
+ "alerts": [{"time": "2024-05-14T13:00:00+02:00", "time_label": "Today 13:00", "category": "heating", "category_label": "Heating",
+             "value_kwh": 2.4, "limit_kwh": 2.0, "value_display": "2.4 kWh", "limit_display": "2.0 kWh", "message": "Heating above limit: 2.4 kWh"}],
+ "banner": {"key": "2024-05-14T13:00:00+02:00/heating", "title": "Heating is above the limit at 13:00.",
+            "text": "The heating load (2.4 kWh) exceeds the defined limit of 2.0 kWh.", "lines": []}}
+```
+
+Error (`GET /api/alerts`): `{"error": {"code": "missing_parameter", "message": "'building' is required."}}`
+
+### POST /api/coach/ask
+
+Requires the CSRF token in the `X-CSRFToken` header (the pages provide it in `<meta name="csrf-token">`). Body: `{"question": "...", "tone": "encouraging", "building": "library"}`. `question` is trimmed and must be 1–500 characters; `building` defaults to `library`, but the frontend always sends it. `response_time_s` is `null` for fallback and cached answers.
+
+```json
+{"building": "library", "question": "How can we reduce energy use in the afternoon?", "tone": "encouraging",
+ "answer": "Lower the heating by 1 °C between 13:00 and 17:00. This saves about 1.1 kWh per day (−7%) and keeps the rooms comfortable.",
+ "source": "OpenAI", "response_time_s": 2.1, "answered_at": "2026-10-21T00:12:18+02:00"}
+```
+
+Errors: `{"error": {"code": "invalid_parameter", "message": "'question' must be a non-empty text."}}`, or `csrf_failed` when the token is missing.
+
+### GET /api/coach/status
+
+```json
+{"status": "online", "label": "Online", "checked_at": "2026-10-21T00:12:18+02:00"}
+```
+
+Error (`POST /api/coach/status`, HTTP 405): `{"error": {"code": "method_not_allowed", "message": "This address does not support that kind of request."}}`
