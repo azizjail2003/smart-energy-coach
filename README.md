@@ -187,7 +187,7 @@ classDiagram
 
 ## Presentation Link
 
-Team video (3 to 5 minutes): _link to be added after recording_.
+Team video (3 to 5 minutes): [Homework Assignment 1 presentation](https://drive.google.com/file/d/1tJGRWD5QOZcxYJxqm4bDNQkPmnwRuzyc/view?usp=sharing)
 
 ---
 
