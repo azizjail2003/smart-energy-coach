@@ -332,7 +332,7 @@ This runs the tests of all three subsystems, including `tests/s2/test_adapters.p
 
 ## Presentation Link
 
-Team video (3 to 5 minutes): link follows after recording.
+Team video (3 to 5 minutes): [Homework Assignment 3 presentation](https://drive.google.com/file/d/1I49TwlNNM-RX25xeFP6YbW1sH9z8aezh/view?usp=sharing)
 
 ---
 
