@@ -178,6 +178,8 @@ classDiagram
 | `AlertMonitor` | `subsystems/s1_analytics.py` | Loads per-building thresholds from storage, merges defaults, and detects device limit breaches. |
 | `EnergyReading` | `subsystems/s1_analytics.py` | Dataclass validating non-negative kWh, realistic temperature (`0–45 °C`), device category, and building ID. |
 
+---
+
 ### S3 – AI Coach, Data Persistence & Deployment
 
 Added by the S3 owner.
