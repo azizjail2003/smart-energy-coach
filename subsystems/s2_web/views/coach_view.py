@@ -4,6 +4,8 @@ from subsystems.s2_web.errors import ServiceUnavailableError
 
 PREVIEW_QUESTION = "What should we change today?"
 PREVIEW_TONE = "encouraging"
+# S3 names its answer sources in lowercase; the chat shows them in words.
+SOURCE_LABELS = {"openai": "OpenAI", "nvidia": "NVIDIA", "fallback": "Backup tips", "cached": "Cached answer"}
 
 
 class CoachView:
@@ -66,13 +68,15 @@ class CoachView:
             raise ValueError(f"'building' must be one of: {', '.join(BUILDINGS)}.")
 
         result = self._ask_coach(question, tone, building)
+        source = SOURCE_LABELS.get(result["source"], result["source"])
+        live = source not in ("Backup tips", "Cached answer")
         return {
             "building": building,
             "question": question,
             "tone": tone,
             "answer": result["answer"],
-            "source": result["source"],
-            "response_time_s": result["response_time_s"],
+            "source": source,
+            "response_time_s": result.get("response_time_s") if live else None,
         }
 
     def _ask_coach(self, question, tone, building):

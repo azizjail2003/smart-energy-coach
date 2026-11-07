@@ -156,11 +156,10 @@ def test_secret_key_is_required(monkeypatch):
         create_app()
 
 
-def test_use_mock_false_needs_adapters(monkeypatch):
+def test_use_mock_false_switches_to_the_real_subsystems(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "x")
     monkeypatch.setenv("USE_MOCK", "false")
-    with pytest.raises(RuntimeError, match="USE_MOCK"):
-        create_app()
+    assert create_app().config["USE_MOCK"] is False
 
 
 def test_views_do_not_import_mock_data():

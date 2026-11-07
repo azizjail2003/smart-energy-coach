@@ -1,4 +1,4 @@
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 
 from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, DEFAULT_BUILDING, HISTORY_PERIODS
 from subsystems.s2_web.errors import InvalidInputError
@@ -69,7 +69,7 @@ def settings():
 
     if form.validate_on_submit():
         view.settings(building, form, save=True)
-        flash("Limits saved for this session.", "success")
+        flash("Limits saved for this session." if current_app.config["USE_MOCK"] else "Limits saved.", "success")
         return redirect(url_for("pages.settings", building=building))
 
     status = 400 if form.errors else 200
