@@ -7,6 +7,10 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Local SQLite databases
+*.db
+data/
+
 # Local configuration and secrets; .env.example is meant to be shared
 .env
 .env.*
