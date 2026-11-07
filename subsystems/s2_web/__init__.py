@@ -32,6 +32,9 @@ def create_app(test_config=None):
         DEBUG=env_flag("FLASK_DEBUG", False),
         USE_MOCK=env_flag("USE_MOCK", True),
         COACH_STATUS=os.environ.get("MOCK_COACH_STATUS", "online"),
+        # Used only with USE_MOCK=false: where the real S1 keeps its readings.
+        # S3 reads its own DATABASE_URL setting.
+        S1_DB_PATH=os.environ.get("S1_DB_PATH", os.path.join("instance", "s1_energy.db")),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         # The token stays valid for the whole browser session, so a dashboard left open can still post.
@@ -42,11 +45,6 @@ def create_app(test_config=None):
 
     if not app.config["SECRET_KEY"]:
         raise RuntimeError("SECRET_KEY is not set. Export a long random value before starting the app.")
-    if not app.config["USE_MOCK"]:
-        raise RuntimeError(
-            "USE_MOCK is false, but no adapters for the real S1 and S3 services exist yet. "
-            "Set USE_MOCK=true or add the adapters in subsystems/s2_web/services/__init__.py."
-        )
     if app.config["COACH_STATUS"] not in COACH_STATUSES:
         raise RuntimeError(f"MOCK_COACH_STATUS must be one of: {', '.join(COACH_STATUSES)}.")
 
@@ -70,6 +68,7 @@ def create_app(test_config=None):
             "app_version": APP_VERSION,
             "buildings": BUILDINGS,
             "current_building": building,
+            "demo_mode": app.config["USE_MOCK"],
             "building_source": kpis["source"],
             "report_date": report_date,
             "report_date_display": f"{report_date:%a}, {report_date.day} {report_date:%B %Y}",

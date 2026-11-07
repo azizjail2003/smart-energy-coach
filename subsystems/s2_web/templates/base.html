@@ -113,7 +113,7 @@
             <span class="rail__avatar" aria-hidden="true">IV</span>
             <span class="rail__label rail__team-text">
               <strong>Capstone Team IV</strong>
-              <small>FH Dortmund · Demo data</small>
+              <small>FH Dortmund · {{ "Demo data" if demo_mode else "S1 and S3 data" }}</small>
             </span>
           </div>
         </div>
@@ -133,7 +133,7 @@
     <footer class="statusbar">
       <p class="statusbar__live" role="status" data-status-live>
         <span class="dot dot--demo" data-status-dot aria-hidden="true"></span>
-        <span data-status-text>Demo data</span>
+        <span data-status-text>{{ "Demo data" if demo_mode else "Data from S1 and S3" }}</span>
       </p>
       <span class="statusbar__grow"></span>
       <span class="statusbar__extra">Fachhochschule Dortmund · Capstone Team IV</span>

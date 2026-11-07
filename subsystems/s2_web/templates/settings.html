@@ -44,11 +44,15 @@
           <tr><th scope="row">Team</th><td>Capstone Team IV</td></tr>
           <tr><th scope="row">University</th><td>Fachhochschule Dortmund</td></tr>
           <tr><th scope="row">Version</th><td>{{ app_version }}</td></tr>
-          <tr><th scope="row">Mode</th><td>Demo data</td></tr>
+          <tr><th scope="row">Mode</th><td>{{ "Demo data" if demo_mode else "Connected to S1 and S3" }}</td></tr>
         </tbody>
       </table>
     </div>
+    {% if demo_mode %}
     <p>This is the frontend for subsystem S2. It uses demo data and will be connected to the real services in the next phase. Saved limits last for this browser session only.</p>
+    {% else %}
+    <p>This is the frontend for subsystem S2, connected to the S1 analytics engine and the S3 AI coach. Saved limits are stored by S1 and apply to everyone.</p>
+    {% endif %}
   </section>
 </div>
 {% endblock %}
