@@ -1,6 +1,6 @@
 # S2 – Web interface: full documentation
 
-Subsystem S2 of the AI-Powered Smart Energy Management System (Capstone Team IV, FH Dortmund). The homework summary is in the [README](../../README.md); this page holds the complete S2 documentation.
+Subsystem S2 of the AI-Powered Smart Energy Management System (Group 7, FH Dortmund). The homework summary is in the [README](../../README.md); this page holds the complete S2 documentation.
 
 ## Class diagram
 

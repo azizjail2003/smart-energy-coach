@@ -1,6 +1,6 @@
 # AI-Powered Smart Energy Management System – Homework Assignment 4
 
-Capstone Team IV, Fachhochschule Dortmund. A web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach.
+Group 7, Fachhochschule Dortmund. A web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach.
 
 **Homework Assignment 4: error handling and testing.** Each subsystem has its own error-handling class, and the application has 15 automated tests written with Flask's test client.
 
