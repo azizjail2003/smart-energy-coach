@@ -1,12 +1,12 @@
 # AI-Powered Smart Energy Management System
 
-Capstone Team IV, Fachhochschule Dortmund. A web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach. The system has three subsystems, one per team member, each in its own folder under `subsystems/`.
+Group 7, Fachhochschule Dortmund. A web application that monitors the energy use of campus buildings, scores their sustainability and gives advice through an AI coach. The system has three subsystems, one per team member, each in its own folder under `subsystems/`.
 
 ## Team Overview
 
-| Member | Subsystem | Folder |
+| Member | Subsystem | Folder / Module |
 | --- | --- | --- |
-| Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics` |
+| Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics.py` |
 | Abdelaziz Jail | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
 | Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_ai_data` |
 
@@ -82,7 +82,112 @@ classDiagram
 
 ### S1 – Monitoring, Simulation & Analytics Engine
 
-Added by the S1 owner.
+Five collaborating UML classes (plus the `SQLiteRepository` offline persistence adapter). `AnalyticsService` is the facade consumed by S2 and S3; it coordinates deterministic device simulation (`EnergySimulator`), pure KPI and sustainability math (`ScoreCalculator`), per-building threshold checks (`AlertMonitor`), and validated measurement records (`EnergyReading`).
+
+```mermaid
+classDiagram
+    direction TB
+
+    class AnalyticsService {
+        <<Facade>>
+        +str db_path
+        +SQLiteRepository repository
+        +ScoreCalculator calculator
+        +EnergySimulator simulator
+        +AlertMonitor alert_monitor
+        +save_reading(reading: EnergyReading) None
+        +seed_if_empty(days: int, building_id: str) int
+        +simulate_live_step(building_id: str) list~dict~
+        +get_dashboard_summary(building_id: str, limits: dict) dict
+        +get_score(building_id: str) dict
+        +get_aggregates(period: str, category: str, building_id: str) dict
+        +compute_week_over_week(building_id: str) dict
+        +check_alerts(building_id: str, limits: dict, recent_rows: list) list~dict~
+        +get_alerts(building_id: str, limits: dict, recent_rows: list) list~dict~
+        +simulate_scenario(current_summary: dict, heating_delta_c: float, light_reduction_pct: float, building_id: str) dict
+        +estimate_scenario(changes: dict, building_id: str) dict
+    }
+
+    class EnergySimulator {
+        +ScoreCalculator calculator
+        +int seed
+        +list~str~ devices
+        +dict~str, float~ base_loads
+        +set_seed(seed: int) None
+        +generate_reading(device: str, ts: datetime, building_id: str) EnergyReading
+        +seed_history(days: int, building_id: str, reference_time: datetime) list~EnergyReading~
+    }
+
+    class ScoreCalculator {
+        +float co2_factor
+        +float cost_factor
+        +float cost_per_kwh
+        +float ideal_temp
+        +calc_co2(kwh: float) float
+        +calc_cost(kwh: float) float
+        +calc_comfort(room_temp: float) float
+        +calc_sustainability_score(total_hourly_kwh: float, room_temp: float) dict
+    }
+
+    class AlertMonitor {
+        +SQLiteRepository repository
+        +dict~str, float~ default_limits
+        +get_limits_for_building(building_id: str) dict~str, float~
+        +check_alerts(building_id: str, readings: list, limits: dict) list~dict~
+    }
+
+    class EnergyReading {
+        <<dataclass>>
+        +datetime timestamp
+        +str device_type
+        +float kwh
+        +float room_temp
+        +float co2_kg
+        +int sustainability_score
+        +str building_id
+        +int score
+        +validate() bool
+        +to_dict() dict
+    }
+
+    class SQLiteRepository {
+        <<Repository>>
+        +str db_path
+        +count_readings(building_id: str) int
+        +insert_readings(readings: list~EnergyReading~) None
+        +fetch_readings(building_id: str, limit: int) list~dict~
+        +get_limits_for_building(building_id: str) dict~str, float~
+        +save_limit(building_id: str, device_type: str, limit: float) None
+    }
+
+    AnalyticsService *-- "1" ScoreCalculator : owns
+    AnalyticsService *-- "1" EnergySimulator : owns
+    AnalyticsService *-- "1" AlertMonitor : owns
+    AnalyticsService o-- "1" SQLiteRepository : delegates persistence
+    EnergySimulator o-- "1" ScoreCalculator : computes score & CO2
+    EnergySimulator ..> EnergyReading : creates & validates
+    AlertMonitor o-- "1" SQLiteRepository : loads thresholds
+    SQLiteRepository ..> EnergyReading : persists
+```
+
+| Class | File | Role |
+| --- | --- | --- |
+| `AnalyticsService` | `subsystems/s1_analytics.py` | Facade coordinating seeding, live steps, KPIs, scores, aggregations, alerts, and what-if scenarios. |
+| `EnergySimulator` | `subsystems/s1_analytics.py` | Deterministic generator (`seed=42`) for live device telemetry and 14-day hourly history (`1,344` rows/building). |
+| `ScoreCalculator` | `subsystems/s1_analytics.py` | Stateless mathematical engine for CO₂ (`0.38 kg/kWh`), cost (`0.35 €/kWh`), comfort (`21.0 °C`), and score (`0–100`). |
+| `AlertMonitor` | `subsystems/s1_analytics.py` | Loads per-building thresholds from storage, merges defaults, and detects device limit breaches. |
+| `EnergyReading` | `subsystems/s1_analytics.py` | Dataclass validating non-negative kWh, realistic temperature (`0–45 °C`), device category, and building ID. |
+
+
+| Exception Class | Inherits From | When Raised |
+| --- | --- | --- |
+| `AnalyticsError` | `Exception` | Base exception for all Subsystem 1 errors. |
+| `InvalidReadingError` | `AnalyticsError`, `ValueError` | Invalid kWh (`< 0`), temperature (`∉ [0, 45] °C`), device type, building ID, or timestamp. |
+| `ThresholdConfigurationError` | `AnalyticsError`, `ValueError` | Negative alert limit or blank building ID when saving thresholds. |
+| `ScenarioSimulationError` | `AnalyticsError`, `TypeError`, `ValueError` | Unsupported `current_summary` argument type in scenario simulation. |
+| `RepositoryError` | `AnalyticsError`, `sqlite3.Error` | SQLite persistence or connection failure in `SQLiteRepository`. |
+
+---
 
 ### S3 – AI Coach, Data Persistence & Deployment
 
@@ -91,6 +196,48 @@ Added by the S3 owner.
 ## Presentation Link
 
 Team video (3 to 5 minutes): _link to be added after recording_.
+
+---
+
+# S1 – Monitoring, Simulation & Analytics Engine
+
+**Owner:** Abdelhamid Ahbane  
+**Implementation:** `subsystems/s1_analytics.py` | **Shared Config:** `config.py` | **Test Suite:** `tests/test_s1_analytics.py`  
+**Detailed Handoff Docs:** `docs/handoffs_s1/STAGE_1_HANDOFF.md` – `STAGE_5_FINAL_MASTER_HANDOFF.md`
+
+## Core Capabilities & Formulas
+
+* **Supported Buildings:** `library` (default), `lecture-hall-a`, and `lab-building`
+* **Device Categories:** `Heating` (`1.4 kWh` base), `Servers` (`1.1 kWh` base), `Lighting` (`0.5 kWh` base), `Other` (`0.3 kWh` base)
+* **Mathematical Engine (`ScoreCalculator`):**
+  * **CO₂ Emissions:** `round(kWh × 0.38, 2)` kg
+  * **Energy Cost:** `round(kWh × 0.35, 2)` EUR
+  * **Comfort Index (`K`):** `round(max(0.0, min(1.0, 1.0 - (|room_temp - 21.0| / 10.0))), 2)`
+  * **Sustainability Score:** `round(100 × (0.40 × E + 0.35 × C + 0.25 × K))` where `E = 1.0 - (hourly_kwh / 4.0)` and `C = 1.0 - ((hourly_kwh × 0.38) / 1.6)`
+* **Deterministic Simulation & Seeding:** Uses an isolated `random.Random(42)` instance with occupancy multipliers (`1.4×` from `08:00–18:00`, `0.6×` off-peak) to seed 14 days of hourly history (`1,344` rows per building) in a single batch transaction (`< 0.05 s`). All returned timestamps are Python `datetime` objects.
+* **What-If Scenario Projection (`simulate_scenario` & `estimate_scenario`):** Models heating setpoint changes (`6%` heating delta per `1.0 °C`) and lighting reductions (`0–50%`) without mutating database records.
+
+## S1 Requirements Traceability Matrix
+
+| ID | Requirement Summary | Implemented By | Automated Proof (`tests/test_s1_analytics.py`) |
+| :--- | :--- | :--- | :--- |
+| **FR1** | Generate realistic device energy readings | `EnergySimulator.generate_reading()`, `simulate_live_step()` | `test_single_calculation_performance_under_50ms`, `test_live_step_and_alert_fallback_safety` |
+| **FR2** | Seed 14-day hourly historical dataset (1,344 rows) | `EnergySimulator.seed_history()`, `seed_if_empty()` | `test_seed_and_summary_with_temp_db`, `test_fixed_seed_determinism` |
+| **FR3** | Calculate CO₂ emissions and EUR cost | `ScoreCalculator.calc_co2()`, `calc_cost()` | `test_co2_and_cost_calculation` |
+| **FR4** | Calculate indoor thermal comfort index | `ScoreCalculator.calc_comfort()` | `test_comfort_score_at_ideal_temp` |
+| **FR5** | Calculate weighted sustainability score (0–100) | `ScoreCalculator.calc_sustainability_score()` | `test_comfort_score_at_ideal_temp` |
+| **FR6** | Produce unified dashboard KPIs & view model | `AnalyticsService.get_dashboard_summary()`, `get_score()` | `test_seed_and_summary_with_temp_db`, `test_score_alerts_and_scenario_api` |
+| **FR7** | Detect threshold alerts & compute aggregations/WoW | `AlertMonitor.check_alerts()`, `get_alerts()`, `get_aggregates()`, `compute_week_over_week()` | `test_week_over_week_and_time_aggregations`, `test_alert_monitor_loads_building_limits`, `test_score_alerts_and_scenario_api` |
+| **FR8** | Calculate financial & carbon savings vs. baseline | `AnalyticsService.get_dashboard_summary()` | `test_seed_and_summary_with_temp_db` |
+| **FR9** | Project non-destructive What-If scenarios | `AnalyticsService.simulate_scenario()`, `estimate_scenario()` | `test_scenario_reduces_energy_when_heating_lowered`, `test_uml_method_signature_compatibility`, `test_score_alerts_and_scenario_api` |
+| **FR10** | Validate and persist readings per building | `EnergyReading.validate()`, `save_reading()` | `test_reading_validation_rejects_negative_kwh`, `test_building_isolation` |
+| **NFR1–10** | `< 50 ms` calc, determinism (`seed=42`), modular facade, type safety, safe fallbacks | `s1_analytics.py` & `config.py` | Full 14-test suite in `tests/test_s1_analytics.py`, including `test_returned_timestamps_are_datetime_objects` |
+
+Run the Subsystem 1 test suite:
+
+```bash
+python -m pytest tests/test_s1_analytics.py -v
+```
 
 ---
 
@@ -124,7 +271,7 @@ gunicorn -w 2 -b 127.0.0.1:8000 wsgi:app
 Tests:
 
 ```bash
-pytest
+python -m pytest
 ```
 
 ### Configuration

@@ -1,15 +1,15 @@
 .venv/
 __pycache__/
-
-test_coach.py
-test_repo.py
-
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 *.pyc
 .coverage
 htmlcov/
+
+# Local SQLite databases
+*.db
+data/
 
 # Local configuration and secrets; .env.example is meant to be shared
 .env
@@ -20,3 +20,4 @@ htmlcov/
 instance/
 
 .DS_Store
+
