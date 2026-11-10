@@ -504,3 +504,111 @@ Errors: `{"error": {"code": "invalid_parameter", "message": "'question' must be 
 ```
 
 Error (`POST /api/coach/status`, HTTP 405): `{"error": {"code": "method_not_allowed", "message": "This address does not support that kind of request."}}`
+
+## Getting Started: How to Run the Project
+
+This guide provides step-by-step instructions to set up the environment, run the integrated Smart Energy application (S1, S2, and S3) using Docker, and execute the test suite.
+
+### 1. Prerequisites: Install Docker & Docker Compose
+
+If you are running this on a Linux environment (Ubuntu/Debian) and do not have Docker installed, run the following commands in your terminal:
+
+```bash
+# Update package list and install Docker and the Compose V2 plugin
+sudo apt update
+sudo apt install -y docker.io docker-compose-v2
+
+# Start and enable the Docker service
+sudo systemctl enable --now docker
+
+# Add your user to the docker group to run commands without 'sudo'
+sudo usermod -aG docker $USER
+
+# Apply the group changes immediately to your current terminal session
+newgrp docker
+```
+
+### 2. Project Initialization & Environment Variables
+
+For security reasons, it is highly recommended to use a `.env` file to manage your API keys rather than exporting them in the terminal.
+
+#### Clone this repository and navigate to the project root':'
+
+```bash
+git clone <git@github.com:azizjail2003/smart-energy-coach.git>
+cd <smart-energy-coach>
+```
+
+#### Project Initialization & API Keys
+
+You can provide your AI Engine API keys using one of two methods: a persistent `.env` file or temporary terminal variables. The system supports both OpenAI (or KI Connect NRW) and NVIDIA LLMs.
+
+*Note: The code automatically prioritizes the `OPENAI_API_KEY`. If it fails or is missing, it falls back to NVIDIA, and finally to a local fallback engine.*
+
+##### Option A: Using a `.env` file (Recommended for multiple runs)
+
+1. Create a new file named `.env` in the root directory:
+
+   ```bash
+   touch .env
+   ```
+
+2. Open the file and add your keys:
+
+   ```bash
+   # Mandatory security key for Flask sessions
+   SECRET_KEY="secret-key-for-evaluation-2026"
+
+   # AI Coach API Keys
+   OPENAI_API_KEY="sk-your-openai-or-kiconnect-key"
+   NVIDIA_API_KEY="nvapi-your-nvidia-key"
+   ```
+
+#### Option B: Using temporary memory (Single session)
+
+If you prefer not to save your keys to the disk, you can export them directly into your terminal's active memory before running the application.
+
+Security Tip: Add a leading space before the command so the keys are not saved in your terminal's history.
+
+```bash
+# Mandatory security key for Flask sessions
+export SECRET_KEY="secret-key-for-evaluation-2026"
+
+# AI Coach API Keys
+export OPENAI_API_KEY="openai-or-kiconnect-key"
+export NVIDIA_API_KEY="nvidia-key"
+```
+
+### 3. Running the Project via Docker
+
+Running the project via Docker will automatically set up the Python application (Gunicorn, 2 workers, port 5000) alongside a MySQL 8.0 database.
+
+#### Starting the Application
+
+From the project root directory, build and start the containers:
+
+```bash
+docker compose up --build -d
+```
+
+Wait a few seconds for the MySQL database to initialize and create the default campus buildings. You can check the application logs with `docker compose logs -f web`.
+
+Once running, open your browser and navigate to:[http://localhost:5000](http://localhost:5000)
+
+#### Running the Test Suite in Docker
+
+To run the 222 unit tests inside the Docker environment, you must explicitly set `USE_MOCK="true"`. This ensures the tests use simulated sensor data and mocked AI responses, preventing unnecessary API usage.
+
+Run the following command while the containers are up:
+
+```bash
+docker compose exec -e USE_MOCK="true" web pytest -v
+```
+
+#### Stopping the Application
+
+To stop the containers and clean up the network (without deleting the database volume):
+
+```bash
+docker compose down
+```

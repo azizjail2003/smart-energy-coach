@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from subsystems.s3_coach.s3_models import (
-    EnergyLog, Alert, AIRecommendation, Setting, DeviceCategory, ToneEnum, SourceEnum, Base
+    EnergyLog, Alert, AIRecommendation, Setting, DeviceCategory, ToneEnum, SourceEnum, Base, Building, Alert, 
 )
 from subsystems.s3_coach.s3_errors import S3ConfigurationError, S3DatabaseError
 import os
@@ -302,14 +302,37 @@ def get_session() -> Session:
     # Get the connection string, default to SQLite if not provided in .env
     db_url = os.getenv("DATABASE_URL", "sqlite:///smart_energy.db")
 
-    # Create the SQLAlchemy engine
-    engine = create_engine(db_url)
+    # Create the SQLAlchemy engine (pool_pre_ping keeps MySQL connections alive in Gunicorn)
+    engine = create_engine(db_url, pool_pre_ping=True)
 
     # Ensure all tables defined in S3 models are created in the database
     Base.metadata.create_all(engine)
 
     # Create a session factory bound to this engine
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
-    # Return a new session instance for S2 to use
-    return SessionLocal()
+    session = SessionLocal()
+
+    # Ensure the 3 campus buildings exist on startup (required by MySQL foreign keys)
+    default_buildings = [
+        ("library", "University Library", "Campus North", 4500.00, 90.00),
+        ("lecture-hall-a", "Lecture Hall A", "Campus Center", 3200.00, 88.00),
+        ("lab-building", "Engineering Lab Building", "Campus South", 5100.00, 85.00),
+    ]
+    try:
+        for b_id, name, location, area, target in default_buildings:
+            if not session.query(Building).filter_by(building_id=b_id).first():
+                session.add(
+                    Building(
+                        building_id=b_id,
+                        name=name,
+                        location=location,
+                        total_area_m2=area,
+                        target_score=target,
+                    )
+                )
+        session.commit()
+    except Exception:
+        session.rollback()
+
+    # Return the session instance for S2 to use
+    return session

@@ -138,7 +138,7 @@ class FallbackCoach(LLMClient):
 
 class OpenAIClient(LLMClient):
     """
-    Connects to the OpenAI API to generate contextual recommendations.
+    Connects to the OpenAI / KI Connect NRW API to generate contextual recommendations.
     Requires OPENAI_API_KEY environment variable to be set.
     """
     
@@ -147,6 +147,8 @@ class OpenAIClient(LLMClient):
         self._client: Optional[OpenAI] = None
         self._timeout_s: float = 10.0
         self._max_tokens: int = 500
+        self._base_url: str = os.environ.get("OPENAI_BASE_URL", "https://chat.kiconnect.nrw/api/v1")
+        self._model: str = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         self._setup_client()
 
     def _setup_client(self) -> None:
@@ -161,9 +163,25 @@ class OpenAIClient(LLMClient):
     def api_key(self, value: Optional[str]) -> None:
         self._api_key = value
         if value:
-            self._client = OpenAI(api_key=value, timeout=self._timeout_s, max_retries=2)
+            self._client = OpenAI(
+                api_key=value,
+                base_url=self._base_url,
+                timeout=self._timeout_s,
+                max_retries=2,
+            )
         else:
             self._client = None
+
+    def _resolve_model(self) -> str:
+        """Uses configured model or queries KI Connect /models if needed."""
+        try:
+            models = self._client.models.list()
+            available_ids = [m.id for m in models.data]
+            if available_ids and self._model not in available_ids:
+                self._model = available_ids[0]
+        except Exception:
+            pass
+        return self._model
 
     def generate_recommendation(self, anomaly_data: Dict[str, Any], tone: str) -> str:
         if not self._client:
@@ -175,7 +193,7 @@ class OpenAIClient(LLMClient):
 
         try:
             response: ChatCompletion = self._client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=self._resolve_model(),
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
@@ -341,13 +359,13 @@ class AICoach:
         source = "fallback"
         
         try:
-            response_text = self._nvidia_engine.generate_recommendation(anomaly_data, clean_tone)
-            source = "nvidia"
+            response_text = self._openai_engine.generate_recommendation(anomaly_data, clean_tone)
+            source = "openai"
             self.last_source = "online"
         except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
             try:
-                response_text = self._openai_engine.generate_recommendation(anomaly_data, clean_tone)
-                source = "openai"
+                response_text = self._nvidia_engine.generate_recommendation(anomaly_data, clean_tone)
+                source = "nvidia"
                 self.last_source = "online"
             except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
                 response_text = self._fallback_engine.generate_recommendation(anomaly_data, clean_tone)
@@ -399,13 +417,13 @@ class AICoach:
         source = "fallback"
         
         try:
-            response_text = self._nvidia_engine.generate_recommendation(payload, clean_tone)
-            source = "nvidia"
+            response_text = self._openai_engine.generate_recommendation(payload, clean_tone)
+            source = "openai"
             self._last_source = "online"
         except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
             try:
-                response_text = self._openai_engine.generate_recommendation(payload, clean_tone)
-                source = "openai"
+                response_text = self._nvidia_engine.generate_recommendation(payload, clean_tone)
+                source = "nvidia"
                 self._last_source = "online"
             except (S3ConfigurationError, S3APIError, ValueError, RuntimeError):
                 response_text = self._fallback_engine.generate_recommendation(payload, clean_tone)

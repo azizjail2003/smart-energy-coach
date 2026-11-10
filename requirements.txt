@@ -6,3 +6,5 @@ SQLAlchemy>=2.0.0
 openai>=1.0.0
 python-dotenv==1.2.4
 tzdata
+PyMySQL>=1.1.0
+cryptography>=42.0.0
