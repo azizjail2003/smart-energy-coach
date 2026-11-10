@@ -1,0 +1,43 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: smart_energy_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: smart_energy
+      MYSQL_USER: energy_user
+      MYSQL_PASSWORD: energy_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "energy_user", "-penergy_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  web:
+    build: .
+    container_name: smart_energy_web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      SECRET_KEY: "${SECRET_KEY:-smart-energy-production-secret-key-2026}"
+      USE_MOCK: "false"
+      S1_DB_PATH: "/app/data/s1_telemetry.db"
+      DATABASE_URL: "mysql+pymysql://energy_user:energy_password@db:3306/smart_energy"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      NVIDIA_API_KEY: "${NVIDIA_API_KEY:-}"
+    volumes:
+      - s1_data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  s1_data:
