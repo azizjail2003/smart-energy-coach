@@ -1,6 +1,7 @@
-from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 
 from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, DEFAULT_BUILDING, HISTORY_PERIODS
+from subsystems.s2_web.errors import InvalidInputError
 from subsystems.s2_web.forms import ScenarioForm, ThresholdForm
 from subsystems.s2_web.services import get_coach_view, get_page_view
 
@@ -14,7 +15,7 @@ def selected_building():
         building = session.get("building", DEFAULT_BUILDING)
         return building if building in BUILDINGS else DEFAULT_BUILDING
     if building not in BUILDINGS:
-        abort(400, description=f"Unknown building '{building}'.")
+        raise InvalidInputError(f"Unknown building '{building}'.")
     session["building"] = building
     return building
 
@@ -22,7 +23,7 @@ def selected_building():
 def optional_choice(name, allowed, default=None):
     value = request.args.get(name, default)
     if value is not None and value not in allowed:
-        abort(400, description=f"Unknown {name} '{value}'.")
+        raise InvalidInputError(f"Unknown {name} '{value}'.")
     return value
 
 
@@ -68,7 +69,7 @@ def settings():
 
     if form.validate_on_submit():
         view.settings(building, form, save=True)
-        flash("Limits saved for this session.", "success")
+        flash("Limits saved for this session." if current_app.config["USE_MOCK"] else "Limits saved.", "success")
         return redirect(url_for("pages.settings", building=building))
 
     status = 400 if form.errors else 200

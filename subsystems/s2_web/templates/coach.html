@@ -51,8 +51,12 @@
         <div><dt>AI service</dt><dd data-status-label>{{ status_label }}</dd></div>
         <div><dt>Last response</dt><dd data-last-response>No question asked yet</dd></div>
         <div><dt>Answer source</dt><dd data-source>–</dd></div>
+        {% if demo_mode %}
         <div><dt>Context sent</dt><dd>Selected building, question and tone</dd></div>
         <div><dt>Mode</dt><dd>Demo answers, no AI request is made</dd></div>
+        {% else %}
+        <div><dt>Context sent</dt><dd>Selected building, question and tone</dd></div>
+        {% endif %}
       </dl>
       <p class="field__error" data-status-error hidden></p>
     </section>

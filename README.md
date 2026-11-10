@@ -243,7 +243,7 @@ python -m pytest tests/test_s1_analytics.py -v
 
 # S2 – Web interface
 
-Flask frontend (subsystem S2). All data comes from mock services; the analytics (S1) and AI coach (S3) subsystems are not connected yet.
+Flask frontend (subsystem S2). By default it shows demo data; with `USE_MOCK=false` it reads its data from S1 (analytics) and S3 (AI coach).
 
 ## Setup
 
@@ -280,15 +280,19 @@ python -m pytest
 |---|---|---|
 | `SECRET_KEY` | none (required) | Signs the session cookie and CSRF tokens. The app refuses to start without it. Use the same value for all workers. |
 | `FLASK_DEBUG` | off | Set to `1` only for local debugging. |
-| `USE_MOCK` | `true` | `false` stops the app with a configuration error until real S1/S3 adapters exist. |
-| `MOCK_COACH_STATUS` | `online` | Mock coach status: `online`, `fallback` or `cached`. |
+| `USE_MOCK` | `true` | `false` reads the data from the real S1 and S3 instead of the demo services. |
+| `S1_DB_PATH` | `instance/s1_energy.db` | S1 database; created and filled on first start. S3 also reads it for the coach's building data, so export it when `USE_MOCK=false`. |
+| `DATABASE_URL` | `sqlite:///smart_energy.db` | S3 database for the coach's answers and cache; a MySQL address also works. |
+| `NVIDIA_API_KEY`, `OPENAI_API_KEY` | none | Optional. With a key the coach answers with a live model; without one it uses its fallback. |
+| `MOCK_COACH_STATUS` | `online` | Demo coach status: `online`, `fallback` or `cached`. |
 
 ## Structure
 
 ```
 subsystems/
   s2_web/
-    __init__.py        app factory, configuration, error handlers
+    __init__.py        app factory and configuration
+    errors.py          S2Error, InvalidInputError, ServiceUnavailableError and the ErrorHandler
     catalog.py         accepted buildings, device types, tones and periods
     forms.py           ScenarioForm and ThresholdForm (Flask-WTF)
     presenter.py       ChartPresenter and the formatting helpers behind it
@@ -296,6 +300,7 @@ subsystems/
       __init__.py      get_analytics(), get_coach() and the view factories: the only way routes reach S1/S3
       analytics.py     MockAnalyticsService (S1 mock)
       coach.py         MockAICoach (S3 mock)
+      s1_adapter.py    S1AnalyticsAdapter: the real S1 in the format the pages use
       mock_data.py     report figures and demo fixtures
     views/
       page_view.py     PageView: context for the pages and JSON endpoints
@@ -355,7 +360,7 @@ class MockAICoach:                     # S3
     tips(building_id) -> list[str]
 ```
 
-Integration point: `subsystems/s2_web/services/__init__.py`. Replace the two factory functions with adapters for the real services and remove the `USE_MOCK` check in `subsystems/s2_web/__init__.py`. Views and templates do not need to change.
+Integration point: `subsystems/s2_web/services/__init__.py`. With `USE_MOCK=false`, `get_analytics()` returns `S1AnalyticsAdapter`, which reads S1's `AnalyticsService` and returns the same format as the mock, and `get_coach()` returns S3's `AICoach` directly, because it already has `ask`, `status` and `tips`. Views and templates did not need to change.
 
 ### Session state
 
@@ -367,13 +372,13 @@ All responses are JSON. Times are ISO 8601 with offset (Europe/Berlin), dates ar
 
 Accepted values: `building` = `library`, `lecture-hall-a`, `lab-building`; `category` = `heating`, `lighting`, `servers`, `other` (omit for all); `period` = `today`, `week`, `7d`, `30d` (`week` and `7d` both mean the 7 days ending on the report date); `tone` = `encouraging`, `analytical`, `strict`.
 
-Errors use HTTP 400 (404 for unknown routes, 405 for a wrong method) and this shape:
+Errors use HTTP 400 (404 for unknown routes, 405 for a wrong method, 503 when S1 or S3 does not answer) and this shape:
 
 ```json
 {"error": {"code": "invalid_parameter", "message": "'building' must be one of: library, lecture-hall-a, lab-building."}}
 ```
 
-Error codes: `missing_parameter`, `invalid_parameter`, `invalid_request`, `csrf_failed`, `not_found`, `method_not_allowed`, `server_error`.
+Error codes: `missing_parameter`, `invalid_parameter`, `invalid_request`, `csrf_failed`, `not_found`, `method_not_allowed`, `service_unavailable`, `server_error`.
 
 Charts share one structure, built in `presenter.py` and drawn by `static/js/common.js`:
 

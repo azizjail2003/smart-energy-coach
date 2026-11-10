@@ -1,8 +1,11 @@
 """CoachView: everything the web interface shows from the S3 AI coach."""
 from subsystems.s2_web.catalog import BUILDINGS, COACH_STATUSES, DEFAULT_BUILDING, MAX_QUESTION_LENGTH, TONES
+from subsystems.s2_web.errors import ServiceUnavailableError
 
 PREVIEW_QUESTION = "What should we change today?"
 PREVIEW_TONE = "encouraging"
+# S3 names its answer sources in lowercase; the chat shows them in words.
+SOURCE_LABELS = {"openai": "OpenAI", "nvidia": "NVIDIA", "fallback": "Backup tips", "cached": "Cached answer"}
 
 
 class CoachView:
@@ -64,19 +67,28 @@ class CoachView:
         if not isinstance(building, str) or building not in BUILDINGS:
             raise ValueError(f"'building' must be one of: {', '.join(BUILDINGS)}.")
 
-        result = self._coach.ask(question, tone, building)
+        result = self._ask_coach(question, tone, building)
+        source = SOURCE_LABELS.get(result["source"], result["source"])
+        live = source not in ("Backup tips", "Cached answer")
         return {
             "building": building,
             "question": question,
             "tone": tone,
             "answer": result["answer"],
-            "source": result["source"],
-            "response_time_s": result["response_time_s"],
+            "source": source,
+            "response_time_s": result.get("response_time_s") if live else None,
         }
+
+    def _ask_coach(self, question, tone, building):
+        """Ask S3; a lost connection or a timeout becomes a ServiceUnavailableError."""
+        try:
+            return self._coach.ask(question, tone, building)
+        except (ConnectionError, TimeoutError) as error:
+            raise ServiceUnavailableError("The AI coach (S3) did not answer. Try again in a moment.") from error
 
     def preview(self, building):
         """Headline and detail for the AI tip on the dashboard."""
-        answer = self._coach.ask(PREVIEW_QUESTION, PREVIEW_TONE, building)["answer"]
+        answer = self._ask_coach(PREVIEW_QUESTION, PREVIEW_TONE, building)["answer"]
         first, separator, rest = answer.partition(". ")
         if not separator:
             return answer, ""

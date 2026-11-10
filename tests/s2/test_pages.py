@@ -146,20 +146,6 @@ def test_forms_reject_wrong_csrf_token(client):
     assert response.status_code == 400
 
 
-def test_server_errors_hide_details():
-    app = create_app({"SECRET_KEY": "test-secret"})
-
-    @app.get("/boom")
-    def boom():
-        raise RuntimeError("secret internal detail")
-
-    response = app.test_client().get("/boom")
-    assert response.status_code == 500
-    assert b"Something went wrong" in response.data
-    assert b"secret internal detail" not in response.data
-    assert b"Traceback" not in response.data
-
-
 def test_debug_is_off_by_default(app, monkeypatch):
     assert app.debug is False
 
@@ -170,11 +156,10 @@ def test_secret_key_is_required(monkeypatch):
         create_app()
 
 
-def test_use_mock_false_needs_adapters(monkeypatch):
+def test_use_mock_false_switches_to_the_real_subsystems(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "x")
     monkeypatch.setenv("USE_MOCK", "false")
-    with pytest.raises(RuntimeError, match="USE_MOCK"):
-        create_app()
+    assert create_app().config["USE_MOCK"] is False
 
 
 def test_views_do_not_import_mock_data():

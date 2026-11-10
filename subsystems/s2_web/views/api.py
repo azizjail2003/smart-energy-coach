@@ -1,9 +1,10 @@
 import re
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, DEFAULT_BUILDING, PERIOD_DAYS, TIMEZONE
+from subsystems.s2_web.errors import InvalidInputError, S2Error
 from subsystems.s2_web.presenter import iso
 from subsystems.s2_web.services import get_coach_view, get_page_view
 
@@ -12,26 +13,22 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-class ApiError(Exception):
-    def __init__(self, code, message):
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
-@bp.errorhandler(ApiError)
+@bp.errorhandler(S2Error)
 def api_error(error):
-    return jsonify(error={"code": error.code, "message": error.message}), 400
+    """The API answers its own errors as JSON, so the blueprint also works in a minimal app."""
+    if error.status >= 500:
+        current_app.logger.error("%s: %s", type(error).__name__, error.message)
+    return jsonify(error={"code": error.code, "message": error.message}), error.status
 
 
 def query_choice(name, allowed, default=None, required=False):
     value = request.args.get(name)
     if value is None:
         if required:
-            raise ApiError("missing_parameter", f"'{name}' is required.")
+            raise InvalidInputError(f"'{name}' is required.", code="missing_parameter")
         return default
     if value not in allowed:
-        raise ApiError("invalid_parameter", f"'{name}' must be one of: {', '.join(allowed)}.")
+        raise InvalidInputError(f"'{name}' must be one of: {', '.join(allowed)}.")
     return value
 
 
@@ -44,7 +41,7 @@ def query_date(name, default):
             raise ValueError
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
-        raise ApiError("invalid_parameter", f"'{name}' must be a date in YYYY-MM-DD format.") from None
+        raise InvalidInputError(f"'{name}' must be a date in YYYY-MM-DD format.") from None
 
 
 @bp.get("/kpis")
@@ -69,7 +66,7 @@ def hourly():
     try:
         return jsonify(get_page_view().api_hourly(building, day, category, compare))
     except ValueError as error:
-        raise ApiError("invalid_parameter", str(error)) from None
+        raise InvalidInputError(str(error)) from None
 
 
 @bp.get("/aggregates")
@@ -89,14 +86,14 @@ def alerts():
 def coach_ask():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        raise ApiError("invalid_request", "Send a JSON object with 'question', 'tone' and 'building'.")
+        raise InvalidInputError("Send a JSON object with 'question', 'tone' and 'building'.", code="invalid_request")
 
     try:
         result = get_coach_view().ask(
             payload.get("question"), payload.get("tone"), payload.get("building", DEFAULT_BUILDING),
         )
     except ValueError as error:
-        raise ApiError("invalid_parameter", str(error)) from None
+        raise InvalidInputError(str(error)) from None
     return jsonify(**result, answered_at=iso(datetime.now(TIMEZONE)))
 
 
