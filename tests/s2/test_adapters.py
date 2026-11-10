@@ -41,7 +41,7 @@ def test_real_subsystems_fit_the_views(s1, s3):
 
 def test_kpis_come_from_s1_and_add_up(s1):
     kpis = s1.get_kpis("library")
-    assert kpis["source"] == "s1"
+    assert kpis["source"] == "live"
     assert set(kpis["by_category"]) == set(CATEGORIES)
     total = sum(part["energy_kwh"] for part in kpis["by_category"].values())
     assert total == pytest.approx(kpis["energy_kwh"], abs=0.3)
@@ -89,4 +89,4 @@ def test_every_page_works_when_connected(folder, monkeypatch, path):
     response = app.test_client().get(path)
     assert response.status_code == 200
     if path == "/":
-        assert b"Data from S1 and S3" in response.data
+        assert b"Live data" in response.data

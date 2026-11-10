@@ -115,7 +115,7 @@ def test_analytics_down_returns_503(client, monkeypatch):
     api = client.get("/api/kpis?building=library")
     assert api.status_code == 503
     assert api.get_json()["error"] == {
-        "code": "service_unavailable", "message": "The analytics service (S1) did not answer. Try again in a moment.",
+        "code": "service_unavailable", "message": "The analytics service did not answer. Try again in a moment.",
     }
     page = client.get("/")
     assert page.status_code == 503
@@ -132,7 +132,7 @@ def test_ai_coach_down_returns_503(client, monkeypatch):
         headers={"X-CSRFToken": token},
     )
     assert response.status_code == 503
-    assert response.get_json()["error"]["message"] == "The AI coach (S3) did not answer. Try again in a moment."
+    assert response.get_json()["error"]["message"] == "The AI coach did not answer. Try again in a moment."
     # The dashboard still loads; only the coach tip says it is unavailable.
     dashboard = client.get("/")
     assert dashboard.status_code == 200

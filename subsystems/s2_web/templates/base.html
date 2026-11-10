@@ -115,7 +115,7 @@
             <span class="rail__avatar" aria-hidden="true">7</span>
             <span class="rail__label rail__team-text">
               <strong>Group 7</strong>
-              <small>FH Dortmund · {{ "Demo data" if demo_mode else "S1 and S3 data" }}</small>
+              <small>FH Dortmund · {{ "Demo data" if demo_mode else "Live data" }}</small>
             </span>
           </div>
         </div>
@@ -126,7 +126,7 @@
       {% if building_source == "demo" %}
       <p class="notice">
         {{ icon("info", 16) }}
-        <span>{{ buildings[current_building] }} shows demonstration data made for this prototype. Only the Library figures come from the capstone report.</span>
+        <span>{{ buildings[current_building] }} shows demonstration data, not measured values.</span>
       </p>
       {% endif %}
       {% block content %}{% endblock %}
@@ -135,7 +135,7 @@
     <footer class="statusbar">
       <p class="statusbar__live" role="status" data-status-live>
         <span class="dot dot--demo" data-status-dot aria-hidden="true"></span>
-        <span data-status-text>{{ "Demo data" if demo_mode else "Data from S1 and S3" }}</span>
+        <span data-status-text>{{ "Demo data" if demo_mode else "Live data" }}</span>
       </p>
       <span class="statusbar__grow"></span>
       <span class="statusbar__extra">Fachhochschule Dortmund · Group 7</span>

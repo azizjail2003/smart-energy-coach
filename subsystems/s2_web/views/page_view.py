@@ -71,7 +71,7 @@ class PageView:
         try:
             return self._analytics.get_kpis(building)
         except (ConnectionError, TimeoutError) as error:
-            raise ServiceUnavailableError("The analytics service (S1) did not answer. Try again in a moment.") from error
+            raise ServiceUnavailableError("The analytics service did not answer. Try again in a moment.") from error
 
     def report_date(self, building):
         return self.kpis(building)["date"]
