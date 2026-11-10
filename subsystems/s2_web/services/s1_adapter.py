@@ -92,7 +92,7 @@ class S1AnalyticsAdapter:
         calculator = self._service(building_id).calculator
         return {
             "date": day,
-            "source": "s1",
+            "source": "live",
             **self._figures(building_id, total),
             "change_pct": percent_change(total, total_before),
             "savings": {"eur": calculator.calc_cost(saved), "co2_kg": round(calculator.calc_co2(saved), 1),

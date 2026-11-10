@@ -84,7 +84,7 @@ class CoachView:
         try:
             return self._coach.ask(question, tone, building)
         except (ConnectionError, TimeoutError) as error:
-            raise ServiceUnavailableError("The AI coach (S3) did not answer. Try again in a moment.") from error
+            raise ServiceUnavailableError("The AI coach did not answer. Try again in a moment.") from error
 
     def preview(self, building):
         """Headline and detail for the AI tip on the dashboard."""

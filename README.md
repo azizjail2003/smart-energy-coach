@@ -334,6 +334,24 @@ Every page is one click away in the navigation rail on the left, and every featu
 | Change alert limits | 2: Settings, then Save limits after setting Lighting to 0.2 | "Limits saved for this session."; back on the dashboard the banner lists the new alerts within 10 s |
 | Theme | 1: the theme button in the rail | System → Dark → Light |
 
+## Performance and accessibility checks
+
+Measured on 10 November 2026 on localhost, with the app running under Gunicorn with 2 workers.
+
+**First page load (S2-NFR1: under 2 s).** Each page was opened five times in Chromium with an empty cache; the table shows the median time until the page had loaded and every chart had its data.
+
+| Page | Demo data | Connected to S1 and S3 |
+|---|---|---|
+| Dashboard | 0.29 s | 0.41 s |
+| History & Alerts (7 days) | 0.23 s | 0.28 s |
+| Scenarios | 0.20 s | 0.25 s |
+| AI Coach | 0.22 s | 0.21 s |
+| Settings | 0.19 s | 0.41 s |
+
+The slowest single load was 0.84 s. The very first request after starting in connected mode took 1.4 s, because S1 fills its database then. The dashboard transfers about 430 kB, most of it Chart.js.
+
+**Text contrast (S2-NFR8: WCAG AA, 4.5:1).** Checked with axe-core 4.14 (rule `color-contrast`) in the light and the dark theme: every page, the error pages, and the states that appear after an action (chat messages, saved and error messages, scenario results), with demo data and connected to S1 and S3, and with the coach status Online, Fallback and Cached. No text was below the limit. The tooltip, which the tool does not test, has a contrast of 14.2:1 in the light theme and 12.9:1 in the dark theme.
+
 ## Mock data
 
 `subsystems/s2_web/services/mock_data.py` holds every figure. The Library values (reference date Tuesday 14 May 2024) are the capstone report figures. Lecture Hall A and Lab Building are demonstration datasets made up for the prototype and are labelled as such in the interface. All series are fixed lists or derived from them, so changing building or category never changes history. Only `/api/score` adds a random variation of at most ±0.5 points to the reference score. Times use Europe/Berlin.
@@ -368,7 +386,7 @@ Alert limits are saved per building in the signed Flask session cookie. Every Gu
 
 ## JSON API
 
-All responses are JSON. Times are ISO 8601 with offset (Europe/Berlin), dates are `YYYY-MM-DD`, energy is in kWh, CO₂ in kg and cost in EUR. Every response that concerns a building includes `building: {"id", "name", "data"}`, where `data` is `reference` (report figures) or `demo`. A value of `null` in a chart series means no reading for that interval.
+All responses are JSON. Times are ISO 8601 with offset (Europe/Berlin), dates are `YYYY-MM-DD`, energy is in kWh, CO₂ in kg and cost in EUR. Every response that concerns a building includes `building: {"id", "name", "data"}`, where `data` is `reference` (report figures), `demo`, or `live` when the app reads from the analytics service. A value of `null` in a chart series means no reading for that interval.
 
 Accepted values: `building` = `library`, `lecture-hall-a`, `lab-building`; `category` = `heating`, `lighting`, `servers`, `other` (omit for all); `period` = `today`, `week`, `7d`, `30d` (`week` and `7d` both mean the 7 days ending on the report date); `tone` = `encouraging`, `analytical`, `strict`.
 
