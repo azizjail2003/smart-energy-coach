@@ -1,16 +1,24 @@
 import re
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from subsystems.s2_web.catalog import BUILDINGS, CATEGORIES, DEFAULT_BUILDING, PERIOD_DAYS, TIMEZONE
-from subsystems.s2_web.errors import InvalidInputError
+from subsystems.s2_web.errors import InvalidInputError, S2Error
 from subsystems.s2_web.presenter import iso
 from subsystems.s2_web.services import get_coach_view, get_page_view
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+@bp.errorhandler(S2Error)
+def api_error(error):
+    """The API answers its own errors as JSON, so the blueprint also works in a minimal app."""
+    if error.status >= 500:
+        current_app.logger.error("%s: %s", type(error).__name__, error.message)
+    return jsonify(error={"code": error.code, "message": error.message}), error.status
 
 
 def query_choice(name, allowed, default=None, required=False):
