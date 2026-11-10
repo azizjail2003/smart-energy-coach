@@ -538,6 +538,10 @@ You can provide your AI Engine API keys using one of two methods: a persistent `
 2. Open the file and add your keys:
 
    ```bash
+   # Mandatory security key for Flask sessions
+   SECRET_KEY="secret-key-for-evaluation-2026"
+
+   # AI Coach API Keys
    OPENAI_API_KEY="sk-your-openai-or-kiconnect-key"
    NVIDIA_API_KEY="nvapi-your-nvidia-key"
    ```
@@ -549,6 +553,10 @@ If you prefer not to save your keys to the disk, you can export them directly in
 Security Tip: Add a leading space before the command so the keys are not saved in your terminal's history.
 
 ```bash
+# Mandatory security key for Flask sessions
+export SECRET_KEY="secret-key-for-evaluation-2026"
+
+# AI Coach API Keys
 export OPENAI_API_KEY="openai-or-kiconnect-key"
 export NVIDIA_API_KEY="nvidia-key"
 ```
