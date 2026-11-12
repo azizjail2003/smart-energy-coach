@@ -8,7 +8,7 @@ Group 7, Fachhochschule Dortmund. A web application that monitors the energy use
 | --- | --- | --- |
 | Abdelhamid Ahbane | S1 – Monitoring, Simulation & Analytics Engine | `subsystems/s1_analytics.py` |
 | Abdelaziz Jail | S2 – Web Interface & Visualization (Flask) | `subsystems/s2_web` |
-| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment | `subsystems/s3_ai_data` |
+| Nestor David Carrizo | S3 – AI Coach, Data Persistence & Deployment, Event-Driven Streaming | `subsystems/s3_coach`, `subsystems/s1_stream.py` |
 
 ## System Design
 
@@ -189,9 +189,263 @@ classDiagram
 
 ---
 
+### S1 (Extension) – Event-Driven Stream Processing Framework
+
+Seven collaborating classes in `subsystems/s1_stream.py` integrated into `AnalyticsService` (`subsystems/s1_analytics.py`). `MeterReadingStream` acts as a bounded Python iterator emitting high-frequency smart-meter events every 5 seconds. `StreamProcessor` is an abstract base class (`ABC`) implemented polymorphically by three pipeline stages (`InactiveMeterFilter`, `CarbonAndComfortTransformer`, and `LoadBalanceAndTariffTransformer`) and composed declaratively using the overloaded bitwise OR (`|`) and addition (`+`) operators into a `StreamPipeline`.
+
+```mermaid
+classDiagram
+    direction TB
+
+    class AnalyticsService {
+        +ScoreCalculator calculator
+        +EnergySimulator simulator
+        +AlertMonitor alert_monitor
+        +build_stream_pipeline(min_kwh_threshold: float) StreamPipeline
+        +stream_live_readings(building_id: str, max_events: int, min_kwh_threshold: float, persist: bool) list~dict~
+        +save_reading(reading: EnergyReading) None
+    }
+
+    class EnergyReading {
+        <<dataclass>>
+        +datetime timestamp
+        +str device_type
+        +float kwh
+        +float room_temp
+        +float co2_kg
+        +int sustainability_score
+        +str building_id
+        +validate() bool
+        +to_dict() dict
+    }
+
+    class StreamEnergyReading {
+        <<dataclass>>
+        +float comfort_index
+        +float cost_eur
+        +bool is_peak_tariff
+        +float building_load_balance_kwh
+        +float device_load_share_pct
+        +bool alert_triggered
+        +from_reading(reading: EnergyReading)$ StreamEnergyReading
+    }
+
+    class MeterReadingStream {
+        <<Iterator>>
+        +EnergySimulator simulator
+        +str building_id
+        +int interval_seconds
+        +int max_events
+        +float inactive_probability
+        -_events_emitted: int
+        -_device_index: int
+        +__iter__() MeterReadingStream
+        +__next__() StreamEnergyReading
+    }
+
+    class StreamProcessor {
+        <<Abstract>>
+        +process_event(event: EnergyReading) Optional~StreamEnergyReading~*
+        +process_stream(stream: Iterable) Iterator~StreamEnergyReading~
+        +__or__(other: StreamProcessor) StreamPipeline
+        +__add__(other: StreamProcessor) StreamPipeline
+    }
+
+    class StreamPipeline {
+        +list~StreamProcessor~ steps
+        -_source_iterator: Iterator
+        +process_event(event: EnergyReading) Optional~StreamEnergyReading~
+        +bind(source: Iterable) StreamPipeline
+        +__iter__() StreamPipeline
+        +__next__() StreamEnergyReading
+    }
+
+    class InactiveMeterFilter {
+        +float min_kwh_threshold
+        +set~str~ allowed_devices
+        +process_event(event: EnergyReading) Optional~StreamEnergyReading~
+    }
+
+    class CarbonAndComfortTransformer {
+        +ScoreCalculator calculator
+        +process_event(event: EnergyReading) Optional~StreamEnergyReading~
+    }
+
+    class LoadBalanceAndTariffTransformer {
+        +ScoreCalculator calculator
+        +AlertMonitor alert_monitor
+        +tuple~int_int~ peak_hours
+        +float peak_tariff_multiplier
+        +dict building_loads
+        +dict device_loads
+        +reset_balances() None
+        +process_event(event: EnergyReading) Optional~StreamEnergyReading~
+    }
+
+    EnergyReading <|-- StreamEnergyReading : inherits
+    StreamProcessor <|-- InactiveMeterFilter : inherits
+    StreamProcessor <|-- CarbonAndComfortTransformer : inherits
+    StreamProcessor <|-- LoadBalanceAndTariffTransformer : inherits
+    StreamProcessor <|-- StreamPipeline : inherits
+    AnalyticsService ..> MeterReadingStream : instantiates
+    AnalyticsService ..> StreamPipeline : builds & binds
+    MeterReadingStream ..> StreamEnergyReading : yields
+    StreamPipeline o-- StreamProcessor : chains via | and +
+```
+
+| Class | File | Role |
+| --- | --- | --- |
+| `StreamEnergyReading` | `subsystems/s1_stream.py` | Polymorphic subclass of `EnergyReading` enriched with comfort index, dynamic EUR cost, peak-tariff flag, load share %, and alert status. |
+| `MeterReadingStream` | `subsystems/s1_stream.py` | Custom Python `Iterator` (`__iter__`, `__next__`) simulating 5-second smart-meter telemetry across devices in round-robin order. |
+| `StreamProcessor` | `subsystems/s1_stream.py` | Abstract Base Class (`ABC`) enforcing `process_event()`, lazy generator evaluation (`process_stream` via `yield`), and operator overloading (`\|` and `+`). |
+| `StreamPipeline` | `subsystems/s1_stream.py` | Composite processor and iterator that chains multiple `StreamProcessor` stages sequentially and binds to an upstream data stream. |
+| `InactiveMeterFilter` | `subsystems/s1_stream.py` | Validates reading integrity, checks device whitelists, and drops standby noise below `min_kwh_threshold` (`0.05 kWh`). |
+| `CarbonAndComfortTransformer` | `subsystems/s1_stream.py` | Enriches surviving stream events with CO₂ equivalents (`kg`), thermal comfort index (`0–1`), and sustainability score (`0–100`). |
+| `LoadBalanceAndTariffTransformer` | `subsystems/s1_stream.py` | Stateful stage tracking cumulative building/device kWh loads, peak-tariff multipliers (`08:00–18:00`, `1.25×`), and threshold alerts. |
+
+---
+
 ### S3 – AI Coach, Data Persistence & Deployment
 
-Added by the S3 owner.
+Six core classes plus SQLAlchemy ORM entities and a custom exception hierarchy. `AICoach` is the central orchestrator consumed by S1 and S2; it queries building telemetry context, checks the relational cache via `MySQLRepository`, and delegates recommendation generation through a polymorphic Strategy interface (`LLMClient`) implemented by `NVIDIAClient`, `OpenAIClient`, and `FallbackCoach`. Domain and persistence errors are handled across layers via `S3CoachError` subclasses. All internal attributes are encapsulated with leading underscores and validated through `@property` getters and setters.
+
+```mermaid
+classDiagram
+    direction TB
+
+    class LLMClient {
+        <<Abstract>>
+        +generate_recommendation(anomaly_data: Dict, tone: str) str*
+    }
+
+    class OpenAIClient {
+        -_api_key: str
+        -_client: OpenAI
+        -_timeout_s: float
+        -_max_tokens: int
+        +api_key «property»
+        -_setup_client() None
+        +generate_recommendation(anomaly_data: Dict, tone: str) str
+    }
+
+    class NVIDIAClient {
+        -_api_key: str
+        -_client: OpenAI
+        -_timeout_s: float
+        -_max_tokens: int
+        +api_key «property»
+        -_setup_client() None
+        +generate_recommendation(anomaly_data: Dict, tone: str) str
+    }
+
+    class FallbackCoach {
+        -_engine_name: str
+        +engine_name «property»
+        -_setup_engine() None
+        +generate_recommendation(anomaly_data: Dict, tone: str) str
+    }
+
+    class AICoach {
+        -_repo: MySQLRepository
+        -_last_source: str
+        -_fallback_engine: FallbackCoach
+        -_nvidia_engine: NVIDIAClient
+        -_openai_engine: OpenAIClient
+        +repo «property»
+        +last_source «property»
+        -_initialize_strategies() None
+        -_generate_hash(data: Any, tone: str) str
+        +get_recommendation(building_id: str, anomaly_data: Dict, tone: str) str
+        +ask(question: str, tone: str, building_id: str) Dict
+        +status() str
+        +tips(building_id: str) List~str~
+    }
+
+    class MySQLRepository {
+        -_session: Session
+        +session «property»
+        -_setup_repository(session: Session) None
+        +get_limits(building_id: str) Dict
+        +save_limits(building_id: str, limits: Dict) None
+        +save_energy_log(building_id: str, device_id: int, timestamp: datetime, consumption: float, co2: float) None
+        +save_alert(building_id: str, timestamp: datetime, alert_type: str, message: str, threshold: float, value: float) None
+        +get_cached_recommendation(building_id: str, context_hash: str) Optional~str~
+        +save_ai_recommendation(building_id: str, context_hash: str, tone: str, response: str, source: str, tokens: int) None
+        +seed_sample_data() Dict
+    }
+
+    class S3CoachError {
+        <<Exception>>
+        -_message: str
+        -_error_code: str
+        +message «property»
+        +error_code «property»
+        +__str__() str
+    }
+
+    class S3ConfigurationError {
+        <<Exception>>
+    }
+
+    class S3APIError {
+        <<Exception>>
+    }
+
+    class S3DatabaseError {
+        <<Exception>>
+    }
+
+    class Building {
+        <<ORM Model>>
+        +str building_id
+        +str name
+        +float total_area_m2
+        +float target_score
+    }
+
+    class AIRecommendation {
+        <<ORM Model>>
+        +int rec_id
+        +str building_id
+        +datetime created_at
+        +ToneEnum tone
+        +str context_hash
+        +str response_text
+        +SourceEnum source
+        +int tokens_used
+    }
+
+    LLMClient <|-- OpenAIClient : inherits
+    LLMClient <|-- NVIDIAClient : inherits
+    LLMClient <|-- FallbackCoach : inherits
+    AICoach *-- OpenAIClient : composition
+    AICoach *-- NVIDIAClient : composition
+    AICoach *-- FallbackCoach : composition
+    AICoach o-- MySQLRepository : injected via __init__
+    MySQLRepository ..> Building : manages
+    MySQLRepository ..> AIRecommendation : caches & queries
+    Building "1" <-- "*" AIRecommendation : foreign key
+    S3CoachError <|-- S3ConfigurationError : inherits
+    S3CoachError <|-- S3APIError : inherits
+    S3CoachError <|-- S3DatabaseError : inherits
+```
+
+| Class | File | Role |
+| --- | --- | --- |
+| `AICoach` | `subsystems/s3_coach/s3_ai_coach.py` | Main orchestrator that enriches prompts with S1 building context, checks SHA-256 cache, invokes live LLMs, and degrades gracefully to fallback rules. |
+| `LLMClient` | `subsystems/s3_coach/s3_ai_coach.py` | Abstract base class (`ABC`) defining the `generate_recommendation(anomaly_data, tone)` contract. |
+| `OpenAIClient` | `subsystems/s3_coach/s3_ai_coach.py` | Live strategy connecting to OpenAI / KI Connect (`10.0 s` timeout, `2` retries, `500` max tokens). |
+| `NVIDIAClient` | `subsystems/s3_coach/s3_ai_coach.py` | Live strategy connecting to NVIDIA NIM API (`8.0 s` timeout, `300` max tokens). |
+| `FallbackCoach` | `subsystems/s3_coach/s3_ai_coach.py` | Deterministic rule-based local engine ensuring zero-downtime recommendations when APIs are offline. |
+| `MySQLRepository` | `subsystems/s3_coach/s3_repository.py` | SQLAlchemy data-access layer managing transactional writes (`session.rollback()` on error), alert limits, and SHA-256 AI cache lookups. |
+| `Building` & `AIRecommendation` | `subsystems/s3_coach/s3_models.py` | Declarative SQLAlchemy ORM models (part of the 7-table schema with `ForeignKey`, `Enum`, and `CheckConstraint` validation). |
+
+| Exception Class | Inherits From | Error Code | When Raised |
+| --- | --- | --- | --- |
+| `S3CoachError` | `Exception` | `E300_GENERAL_ERROR` | Base exception for all Subsystem 3 errors; implements `super().__init__()` and `[CODE] message` formatting via `__str__()`. |
+| `S3ConfigurationError` | `S3CoachError` | `E301_CONFIG_ERROR` | Missing API key, empty question, unsupported tone, `None` repository/session, or negative kWh (`E301_NEGATIVE_KWH`). |
+| `S3APIError` | `S3CoachError` | `E302_API_ERROR` | External OpenAI or NVIDIA API failure, network error, or timeout. |
+| `S3DatabaseError` | `S3CoachError` | `E303_DB_ERROR` | SQLAlchemy query or commit failure in `MySQLRepository` (triggers automatic `session.rollback()`). |
 
 ## Presentation Link
 
@@ -237,6 +491,35 @@ Run the Subsystem 1 test suite:
 
 ```bash
 python -m pytest tests/test_s1_analytics.py -v
+```
+## Event-Driven Stream Processing Extension (`subsystems/s1_stream.py`)
+
+**Owner:** Nestor David Carrizo  
+**Implementation:** `subsystems/s1_stream.py` & `AnalyticsService` integration in `subsystems/s1_analytics.py` | **Test Suite:** `tests/test_s1_stream.py`
+
+### Stream Architecture & Capabilities
+
+* **High-Frequency Telemetry Iterator (`MeterReadingStream`):** Implements Python's iterator protocol (`__iter__`, `__next__`) to emit simulated smart-meter events at configurable intervals (default `5 s`) across all building device categories in round-robin order.
+* **Declarative Pipeline Composition (`|` and `+`):** Overloads `__or__` and `__add__` on the abstract `StreamProcessor` base class so processing stages can be chained declaratively:
+  
+  ```python
+  pipeline = (
+      InactiveMeterFilter(min_kwh_threshold=0.05)
+      | CarbonAndComfortTransformer(calculator=calc)
+      | LoadBalanceAndTariffTransformer(calculator=calc, alert_monitor=alert_monitor)
+  )
+  ```
+
+* **Three-Stage Real-Time Processing:**
+  1. **`InactiveMeterFilter`:** Validates readings via `EnergyReading.validate()`, enforces optional device whitelists, and drops corrupt or low-power standby noise (`< 0.05 kWh`).
+  2. **`CarbonAndComfortTransformer`:** Computes real-time CO₂ emissions (`kg`), thermal comfort index (`K`), and updated sustainability scores (`0–100`).
+  3. **`LoadBalanceAndTariffTransformer`:** Maintains stateful cumulative load balances per building and device share (`%`), detects peak-tariff windows (`08:00–18:00` with a `1.25×` cost multiplier), and flags threshold breaches via `AlertMonitor`.
+* **Integration with `AnalyticsService`:** Exposed through `AnalyticsService.build_stream_pipeline()` and `AnalyticsService.stream_live_readings()`, which binds `MeterReadingStream` to the pipeline, persists surviving events to SQLite, and returns serialized dictionaries.
+
+Run the Event-Driven Stream Processing test suite (10 unit & integration tests):
+
+```bash
+python -m pytest tests/test_s1_stream.py -v
 ```
 
 ---
@@ -505,13 +788,129 @@ Errors: `{"error": {"code": "invalid_parameter", "message": "'question' must be 
 
 Error (`POST /api/coach/status`, HTTP 405): `{"error": {"code": "method_not_allowed", "message": "This address does not support that kind of request."}}`
 
-## Getting Started: How to Run the Project
+# S3 – AI Coach, Data Persistence & Deployment
 
-This guide provides step-by-step instructions to set up the environment, run the integrated Smart Energy application (S1, S2, and S3) using Docker, and execute the test suite.
+**Implementation:** `subsystems/s3_coach/` (`s3_ai_coach.py`, `s3_repository.py`, `s3_models.py`, `s3_errors.py`) | **Test Suite:** `tests/test_s3_core.py`
 
-### 1. Prerequisites: Install Docker & Docker Compose
+Backend subsystem managing the AI Sustainability Coach, the 7-table relational MySQL database layer, and the multi-container Docker infrastructure. It implements a polymorphic Strategy pattern (`LLMClient`) to switch seamlessly between live cloud LLMs (`NVIDIAClient`, `OpenAIClient`) and a deterministic rule-based local engine (`FallbackCoach`), backed by SQLAlchemy ORM and SHA-256 response caching.
 
-If you are running this on a Linux environment (Ubuntu/Debian) and do not have Docker installed, run the following commands in your terminal:
+## Setup
+
+Tested with Python 3.12.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Set up API keys for the AI engines:
+
+```bash
+export OPENAI_API_KEY="your-openai-or-kiconnect-key"
+export NVIDIA_API_KEY="your-nvidia-key"
+```
+
+Run the Subsystem 3 test suite (15 unit, repository, and Flask API integration tests using isolated in-memory SQLite and mocks):
+
+```bash
+USE_MOCK="true" python -m pytest tests/test_s3_core.py -v
+```
+
+### Configuration
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | none | API key for `OpenAIClient` (supports OpenAI and FH Dortmund KI Connect). |
+| `NVIDIA_API_KEY` | none | API key for `NVIDIAClient`. If missing or unreachable, `AICoach` automatically falls back to `OpenAIClient` and then `FallbackCoach`. |
+| `DATABASE_URL` | `sqlite:///smart_energy.db` | SQLAlchemy connection string read by `get_session()`. In Docker production, points to `mysql+pymysql://energy_user:energy_password@db:3306/smart_energy`. Tests use `sqlite:///:memory:`. |
+| `S1_DB_PATH` | `/app/data/s1_telemetry.db` | Path to the S1 telemetry database read by `building_context()` to enrich AI prompts with live building metrics. |
+
+## Structure
+
+```text
+subsystems/
+  s3_coach/
+    __init__.py          module initialization
+    s3_models.py         SQLAlchemy declarative Base, Enums (DeviceCategory, ToneEnum, SourceEnum), and 7 ORM table models
+    s3_repository.py     MySQLRepository: encapsulated database session management, transactions, and get_session() factory
+    s3_ai_coach.py       AICoach orchestrator, building_context(), and LLMClient strategy implementations
+    s3_errors.py         Custom OOP exception hierarchy (S3CoachError, S3ConfigurationError, S3APIError, S3DatabaseError)
+tests/
+  test_s3_core.py        15-test suite covering encapsulation, in-memory SQLite persistence, SHA-256 caching, AI fallbacks, and Flask API routes
+```
+
+## Database Schema (SQLAlchemy ORM)
+
+S3 owns the relational schema defined in `subsystems/s3_coach/s3_models.py`. While unit tests run against an isolated in-memory SQLite database (`sqlite:///:memory:`), production runs on **MySQL 8.0** with InnoDB transactions. The schema enforces data integrity via `ForeignKey`, `Enum`, `NOT NULL`, and `CheckConstraint` rules (e.g., `consumption_kwh >= 0`, `total_area_m2 > 0`, `comfort_index BETWEEN 0 AND 1`).
+
+Tables managed (7 tables): `buildings`, `devices`, `energy_logs`, `alerts`, `sustainability_snapshots`, `settings`, and `ai_recommendations`.
+
+## Service Integration (Internal Python API)
+
+S1 and S2 interact with S3 through `AICoach` and `MySQLRepository`. The orchestrator handles S1 context enrichment, SHA-256 cache lookups, API timeouts (`10.0 s` on OpenAI, `8.0 s` on NVIDIA), and automatic fallbacks.
+
+```python
+class AICoach:
+    # Encapsulated State (@property getters and setters)
+    repo: MySQLRepository
+    last_source: str                       # "online", "fallback", or "cached"
+
+    # Core Methods
+    ask(question: str, tone: str, building_id: str) -> dict
+    # Returns: {"answer": str, "source": "openai"|"nvidia"|"fallback"|"cached", "response_time_s": float|None}
+
+    get_recommendation(building_id: str, anomaly_data: dict, tone: str = "analytical") -> str
+    # Returns: JSON string {"tip": "..."} for S1/S2 anomaly alerts
+
+    status() -> str
+    # Returns: "online", "fallback", or "cached"
+
+    tips(building_id: str = "library") -> list[str]
+    # Returns: 3 actionable daily energy tips for the S2 Dashboard
+
+class MySQLRepository:
+    session: Session                       # Protected via @property
+
+    # AI Caching
+    get_cached_recommendation(building_id: str, context_hash: str) -> Optional[str]
+    save_ai_recommendation(building_id: str, context_hash: str, tone: str, response: str, source: str, tokens: int = 0) -> None
+
+    # S1 & S2 Persistence Contracts
+    get_limits(building_id: str) -> dict[str, float]
+    save_limits(building_id: str, limits: dict[str, float]) -> None
+    save_energy_log(building_id: str, device_id: int, timestamp: datetime, consumption: float, co2: float, temp: Optional[float] = None, comfort: Optional[float] = None) -> None
+    save_alert(building_id: str, timestamp: datetime, alert_type: str, message: str, threshold: float, value: float) -> None
+    get_energy_logs(building_id: Optional[str] = None, limit: int = 20) -> list[dict]
+    get_alerts(building_id: Optional[str] = None, limit: int = 20) -> list[dict]
+    get_recommendation_history(building_id: Optional[str] = None, limit: int = 20) -> list[dict]
+    seed_sample_data() -> dict[str, int]
+```
+
+## S3 Requirements Traceability Matrix
+
+| ID | Requirement Summary | Implemented By | Automated Proof (`tests/test_s3_core.py`) |
+| :--- | :--- | :--- | :--- |
+| **FR1–FR3** | Enrich prompts with S1 building context, enforce JSON output & tone (`strict`, `analytical`, `encouraging`) | `building_context()`, `build_system_prompt()`, `AICoach.ask()` | `test_04_ask_returns_openai_response_when_live_api_succeeds`, `test_12_flask_api_ask_endpoint_returns_200` |
+| **FR4** | Zero-downtime rule-based fallback when cloud APIs fail or keys are missing | `FallbackCoach.generate_recommendation()`, `AICoach` `try/except` chain | `test_03_ask_returns_cached_response_without_calling_apis`, `test_05_fallback_coach_handles_anomalies_and_tones`, `test_14_fallback_coach_tones_formatting` |
+| **FR5** | Cache AI recommendations by SHA-256 context hash to save API tokens | `AICoach._generate_hash()`, `MySQLRepository.get_cached_recommendation()` | `test_02_repository_saves_and_retrieves_recommendation`, `test_03_ask_returns_cached_response_without_calling_apis` |
+| **FR6–FR8** | Persist data in 7-table SQLAlchemy schema with constraints & negative kWh rejection | `s3_models.py`, `MySQLRepository.save_energy_log()` | `test_02_repository_saves_and_retrieves_recommendation`, `test_09_save_energy_log_rejects_negative_consumption` |
+| **FR10** | Multi-container Docker orchestration with MySQL 8.0 healthchecks & persistent volumes | `Dockerfile`, `docker-compose.yml` | Verified via `docker compose up --build -d` and `mysqladmin ping` healthcheck |
+| **NFR1–NFR8** | Timeouts (`10 s`), max tokens (`500`), `LLMClient` ABC, custom `S3CoachError` hierarchy, `sqlite:///:memory:` & `MagicMock` isolation | `OpenAIClient`, `s3_errors.py`, `test_s3_core.py` | Full 15-test suite (`test_01` through `test_15`) |
+
+## AI Caching Strategy
+
+To prevent redundant API calls, every request to the `AICoach` generates a SHA-256 hash combining the input data/question and the selected tone. If a match is found in the `ai_recommendations` table, the cached response is returned in milliseconds with `source: "cache"`.
+
+---
+
+# Getting Started: How to Run the Project
+
+This guide provides step-by-step instructions to set up the environment, run the integrated Smart Energy Management System (S1, S2, and S3) using Docker, and execute the full test suite.
+
+## 1. Prerequisites: Install Docker & Docker Compose
+
+If you are running a Debian/Ubuntu-based Linux distribution and do not have Docker installed, run the following commands in your terminal (tested with Docker Engine v24.x+ and Docker Compose v2.x):
 
 ```bash
 # Update package list and install Docker and the Compose V2 plugin
@@ -526,64 +925,66 @@ sudo usermod -aG docker $USER
 
 # Apply the group changes immediately to your current terminal session
 newgrp docker
+
+# Verify installation
+docker --version
+docker compose version
 ```
 
-### 2. Project Initialization & Environment Variables
+## 2. Project Initialization & Environment Variables
 
 For security reasons, it is highly recommended to use a `.env` file to manage your API keys rather than exporting them in the terminal.
 
-#### Clone this repository and navigate to the project root':'
+### Clone this repository and navigate to the project root':'
 
 ```bash
-git clone <git@github.com:azizjail2003/smart-energy-coach.git>
-cd <smart-energy-coach>
+```bash
+git clone [https://github.com/azizjail2003/smart-energy-coach.git](https://github.com/azizjail2003/smart-energy-coach.git)
+cd smart-energy-coach
 ```
 
-#### Project Initialization & API Keys
+### Configure Security & AI Engine API Keys
 
-You can provide your AI Engine API keys using one of two methods: a persistent `.env` file or temporary terminal variables. The system supports both OpenAI (or KI Connect NRW) and NVIDIA LLMs.
+You can provide your mandatory Flask `SECRET_KEY` and optional AI Engine API keys using either a persistent `.env` file or temporary terminal variables. The system supports both **OpenAI (KI Connect)** and **NVIDIA** LLMs.
 
-*Note: The code automatically prioritizes the `OPENAI_API_KEY`. If it fails or is missing, it falls back to NVIDIA, and finally to a local fallback engine.*
+*Note: If you provide `OPENAI_API_KEY` (or `NVIDIA_API_KEY`), the AI Coach automatically uses the live LLM. If a key is missing or an external API fails, it seamlessly falls back to the next available engine and finally to the local `FallbackCoach` so the application never crashes.*
 
-##### Option A: Using a `.env` file (Recommended for multiple runs)
+#### Option A: Using a `.env` file
 
-1. Create a new file named `.env` in the root directory:
+1. Create a `.env` file in the root directory of the project:
 
    ```bash
    touch .env
    ```
 
-2. Open the file and add your keys:
+2. Open `.env` and add your keys:
 
-   ```bash
+   ```env
    # Mandatory security key for Flask sessions
    SECRET_KEY="secret-key-for-evaluation-2026"
 
-   # AI Coach API Keys
+   # AI Coach API Keys (Supply either or both; leave empty to test FallbackCoach)
    OPENAI_API_KEY="sk-your-openai-or-kiconnect-key"
    NVIDIA_API_KEY="nvapi-your-nvidia-key"
    ```
 
-#### Option B: Using temporary memory (Single session)
+#### Option B: Using temporary terminal memory
 
-If you prefer not to save your keys to the disk, you can export them directly into your terminal's active memory before running the application.
+If you prefer not to save your keys to disk, export them directly into your active terminal session before running Docker Compose.
 
-Security Tip: Add a leading space before the command so the keys are not saved in your terminal's history.
+*Security Tip: Include the leading space before each `export` command so the keys are not recorded in your shell history.*
 
 ```bash
-# Mandatory security key for Flask sessions
-export SECRET_KEY="secret-key-for-evaluation-2026"
-
-# AI Coach API Keys
-export OPENAI_API_KEY="openai-or-kiconnect-key"
-export NVIDIA_API_KEY="nvidia-key"
+ export SECRET_KEY="secret-key-for-evaluation-2026"
+ export OPENAI_API_KEY="sk-your-openai-or-kiconnect-key"
+ export NVIDIA_API_KEY="nvapi-your-nvidia-key"
 ```
 
-### 3. Running the Project via Docker
+## 3. Running the Project via Docker
 
-Running the project via Docker will automatically set up the Python application (Gunicorn, 2 workers, port 5000) alongside a MySQL 8.0 database.
+Running the project via Docker automatically builds the Python 3.12 application container (Gunicorn with 2 workers on port 5000) alongside a MySQL 8.0 database container with persistent volumes (`mysql_data` and `s1_data`) and healthcheck ordering.
 
-#### Starting the Application
+### Starting the Application
 
 From the project root directory, build and start the containers:
 
@@ -591,23 +992,27 @@ From the project root directory, build and start the containers:
 docker compose up --build -d
 ```
 
-Wait a few seconds for the MySQL database to initialize and create the default campus buildings. You can check the application logs with `docker compose logs -f web`.
+Wait a few seconds for the MySQL 8.0 container to pass its healthcheck and initialize the campus buildings (`library`, `lecture-hall-a`, `lab-building`). You can follow the startup logs with:
+
+```bash
+docker compose logs -f web
+```
 
 Once running, open your browser and navigate to:[http://localhost:5000](http://localhost:5000)
 
-#### Running the Test Suite in Docker
+### Running the Test Suite
 
-To run the 222 unit tests inside the Docker environment, you must explicitly set `USE_MOCK="true"`. This ensures the tests use simulated sensor data and mocked AI responses, preventing unnecessary API usage.
+To run the complete unit and integration test suite, set `USE_MOCK="true"`. This ensures tests use deterministic sensor data, in-memory SQLite, and mocked AI responses without consuming live API credits.
 
-Run the following command while the containers are up:
+* **Inside the running Docker container:**
 
-```bash
-docker compose exec -e USE_MOCK="true" web pytest -v
-```
+  ```bash
+  docker compose exec -e USE_MOCK="true" web pytest -v
+  ```
 
-#### Stopping the Application
+### Stopping the Application
 
-To stop the containers and clean up the network (without deleting the database volume):
+To stop the containers and clean up the network (while preserving database volumes):
 
 ```bash
 docker compose down
