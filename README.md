@@ -910,7 +910,9 @@ This guide provides step-by-step instructions to set up the environment, run the
 
 ## 1. Prerequisites: Install Docker & Docker Compose
 
-If you are running a Debian/Ubuntu-based Linux distribution and do not have Docker installed, run the following commands in your terminal (tested with Docker Engine v24.x+ and Docker Compose v2.x):
+* **Windows (10/11) & macOS:** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). Ensure the engine is running before executing commands.
+
+* **Linux (Ubuntu/Debian):** Install Docker Engine and Docker Compose:
 
 ```bash
 # Update package list and install Docker and the Compose V2 plugin
@@ -939,33 +941,26 @@ For security reasons, it is highly recommended to use a `.env` file to manage yo
 
 ```bash
 ```bash
-git clone [https://github.com/azizjail2003/smart-energy-coach.git](https://github.com/azizjail2003/smart-energy-coach.git)
+git clone https://github.com/azizjail2003/smart-energy-coach.git
 cd smart-energy-coach
 ```
 
 ### Configure Security & AI Engine API Keys
 
-You can provide your mandatory Flask `SECRET_KEY` and optional AI Engine API keys using either a persistent `.env` file or temporary terminal variables. The system supports both **OpenAI (KI Connect)** and **NVIDIA** LLMs.
-
-*Note: If you provide `OPENAI_API_KEY` (or `NVIDIA_API_KEY`), the AI Coach automatically uses the live LLM. If a key is missing or an external API fails, it seamlessly falls back to the next available engine and finally to the local `FallbackCoach` so the application never crashes.*
+The system is designed with fail-safe defaults. If you skip this step, the application will still boot successfully using a default `SECRET_KEY` and the built-in `FallbackCoach`. However, to test live AI responses, configure your keys:
 
 #### Option A: Using a `.env` file
 
-1. Create a `.env` file in the root directory of the project:
+1. Copy the template file to create your `.env`:
+   * **On Linux / macOS (Bash):** `cp .env.example .env`
+   * **On Windows (PowerShell/CMD):** `copy .env.example .env`
 
-   ```bash
-   touch .env
-   ```
-
-2. Open `.env` and add your keys:
+2. Open the new `.env` file in a text editor and add your API keys:
 
    ```env
-   # Mandatory security key for Flask sessions
    SECRET_KEY="secret-key-for-evaluation-2026"
-
-   # AI Coach API Keys (Supply either or both; leave empty to test FallbackCoach)
-   OPENAI_API_KEY="sk-your-openai-or-kiconnect-key"
-   NVIDIA_API_KEY="nvapi-your-nvidia-key"
+   OPENAI_API_KEY=""
+   NVIDIA_API_KEY=""
    ```
 
 #### Option B: Using temporary terminal memory
@@ -974,11 +969,21 @@ If you prefer not to save your keys to disk, export them directly into your acti
 
 *Security Tip: Include the leading space before each `export` command so the keys are not recorded in your shell history.*
 
+* **On Linux / macOS (Bash):**
+
 ```bash
  export SECRET_KEY="secret-key-for-evaluation-2026"
- export OPENAI_API_KEY="sk-your-openai-or-kiconnect-key"
- export NVIDIA_API_KEY="nvapi-your-nvidia-key"
+ export OPENAI_API_KEY="kiconnect-key"
+ export NVIDIA_API_KEY="nvidia-key"
 ```
+
+* **On Windows (PowerShell):**
+
+  ```powershell
+  $env:SECRET_KEY="secret-key-for-evaluation-2026"
+  $env:OPENAI_API_KEY="sk-your-openai-or-kiconnect-key"
+  $env:NVIDIA_API_KEY="nvapi-your-nvidia-key"
+  ```
 
 ## 3. Running the Project via Docker
 
@@ -986,13 +991,13 @@ Running the project via Docker automatically builds the Python 3.12 application 
 
 ### Starting the Application
 
-From the project root directory, build and start the containers:
+From the project root directory, run the following command to build the image and start the database and web containers in the background. This command is identical on **Windows PowerShell/CMD** and **Linux**:
 
 ```bash
 docker compose up --build -d
 ```
 
-Wait a few seconds for the MySQL 8.0 container to pass its healthcheck and initialize the campus buildings (`library`, `lecture-hall-a`, `lab-building`). You can follow the startup logs with:
+Wait 10 to 15 seconds for the MySQL 8.0 container to pass its healthcheck and initialize the campus buildings. You can monitor the startup logs with:
 
 ```bash
 docker compose logs -f web

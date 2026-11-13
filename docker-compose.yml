@@ -26,8 +26,9 @@ services:
     ports:
       - "5000:5000"
     environment:
-      SECRET_KEY: "${SECRET_KEY:?Set SECRET_KEY in .env}"
-      USE_MOCK: "false"
+      # Use default if .env is missing to prevent crash on Windows
+      SECRET_KEY: "${SECRET_KEY:-secret-key-for-evaluation-2026}"
+      USE_MOCK: "${USE_MOCK:-false}"
       S1_DB_PATH: "/app/data/s1_telemetry.db"
       DATABASE_URL: "mysql+pymysql://energy_user:energy_password@db:3306/smart_energy"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"

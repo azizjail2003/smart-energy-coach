@@ -1,9 +1,35 @@
+# Git and documentation
+.git/
+.git
+.gitignore
+README.md
+docs/
+
+# Virtual environments and Python cache
 .venv/
 venv/
+ENV/
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
 *.pyo
 .pytest_cache/
-.git/
+.coverage
+htmlcov/
+
+# Local databases and runtime instance files (must not be baked into the image)
 *.db
+*.sqlite
+*.sqlite3
+instance/
+data/
+
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Exported Docker images
+*.tar
+*.tar.gz
