@@ -941,7 +941,7 @@ For security reasons, it is highly recommended to use a `.env` file to manage yo
 
 ```bash
 ```bash
-git clone [https://github.com/azizjail2003/smart-energy-coach.git](https://github.com/azizjail2003/smart-energy-coach.git)
+git clone https://github.com/azizjail2003/smart-energy-coach.git
 cd smart-energy-coach
 ```
 
