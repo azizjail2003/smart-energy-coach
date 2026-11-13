@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Directorio para el volumen persistente de S1_DB_PATH
+# Directory for the S1_DB_PATH persistent volume
 RUN mkdir -p /app/data
 
 EXPOSE 5000
